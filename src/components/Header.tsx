@@ -12,7 +12,12 @@ export function Header({ now, availability, partyMode, onOpenSettings }: HeaderP
   return (
     <header className="hud-panel flex items-center gap-3 px-3 py-2 sm:gap-6 sm:px-5">
       <div className="min-w-0">
-        <p className="font-display text-[0.6rem] tracking-[0.25em] text-haze sm:tracking-[0.35em] sm:text-xs">FILINVEST ALABANG INC.</p>
+        <p className="font-display text-[0.6rem] tracking-[0.35em] text-haze sm:text-xs">
+          <abbr title="Filinvest Alabang Inc." className="no-underline sm:hidden">
+            FAI
+          </abbr>
+          <span className="hidden sm:inline">FILINVEST ALABANG INC.</span>
+        </p>
         <h1 className="font-display text-lg font-bold tracking-[0.3em] text-ice glow-text sm:text-2xl">A.F.A.I.K.</h1>
       </div>
 
