@@ -1,5 +1,5 @@
 import { BatteryMedium, Radar } from 'lucide-react';
-import type { ActivityEntry, Suit } from '../types/jarvis';
+import type { ActivityEntry, Suit } from '../types/afaik';
 import { DIAGNOSTIC_COLORS, DIAGNOSTIC_LABELS } from './suitDisplay';
 
 interface TelemetryPanelProps {

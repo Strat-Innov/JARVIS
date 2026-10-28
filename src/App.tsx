@@ -3,7 +3,7 @@ import { CommandHistory } from './components/CommandHistory';
 import { CommandPanel } from './components/CommandPanel';
 import { Drawer } from './components/Drawer';
 import { Header } from './components/Header';
-import { JarvisCore, STATE_LABELS } from './components/JarvisCore';
+import { AfaikCore, STATE_LABELS } from './components/AfaikCore';
 import { SuitStatusPanel } from './components/SuitStatusPanel';
 import { TelemetryPanel } from './components/TelemetryPanel';
 import { VoiceControl } from './components/VoiceControl';
@@ -14,7 +14,7 @@ import { useVoices } from './hooks/useVoices';
 import { Diagnostics, type BrowserCapabilities } from './pages/Diagnostics';
 import { Settings } from './pages/Settings';
 import { Workshop } from './pages/Workshop';
-import type { ActivityEntry, AssistantAction, SessionState, Settings as SettingsModel, Suit, View } from './types/jarvis';
+import type { ActivityEntry, AssistantAction, SessionState, Settings as SettingsModel, Suit, View } from './types/afaik';
 
 const MAX_ACTIVITY = 30;
 const VIEW_TITLES: Record<Exclude<View, 'hud'>, string> = { workshop: 'Workshop', diagnostics: 'Diagnostics', settings: 'Settings' };
@@ -22,7 +22,7 @@ const VOICE_TEST_LINE = 'Good evening, sir. Voice systems are online. The Mark X
 
 function storageAvailable(): boolean {
   try {
-    const key = '__jarvis_probe__';
+    const key = '__afaik_probe__';
     window.localStorage.setItem(key, '1');
     window.localStorage.removeItem(key);
     return true;
@@ -43,7 +43,7 @@ export default function App() {
   const [settings, setSettings] = useState<SettingsModel>(() => loadSettings());
   const [session, setSession] = useState<SessionState>(() => loadSession());
   const [view, setView] = useState<View>('hud');
-  const [activity, setActivity] = useState<ActivityEntry[]>(() => [newEntry('J.A.R.V.I.S. online. All systems initialised.')]);
+  const [activity, setActivity] = useState<ActivityEntry[]>(() => [newEntry('A.F.A.I.K. online. All systems initialised.')]);
   const [diagnosticRuns, setDiagnosticRuns] = useState<Record<string, number>>({});
 
   useEffect(() => void saveSuits(suits), [suits]);
@@ -138,7 +138,7 @@ export default function App() {
   const micStatus = !assistant.recognitionSupported
     ? 'Voice input unavailable — type commands'
     : assistant.wakeArmed
-      ? 'Wake word armed — say “JARVIS”'
+      ? 'Wake word armed — say “AFAIK”'
       : assistant.micOn
         ? 'Microphone on'
         : 'Microphone off';
@@ -155,7 +155,7 @@ export default function App() {
   const displayText =
     assistant.state === 'error' && assistant.errorMessage
       ? assistant.errorMessage
-      : assistant.responseText || 'Good evening. J.A.R.V.I.S. is online. Press the microphone or type a command to begin.';
+      : assistant.responseText || 'Good evening. A.F.A.I.K. is online. Press the microphone or type a command to begin.';
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-[1920px] flex-col gap-3 p-2 sm:p-3 lg:h-dvh lg:p-4">
@@ -175,9 +175,9 @@ export default function App() {
           />
         </aside>
 
-        <section className="order-1 flex min-h-0 min-w-0 flex-col items-center justify-center gap-2 py-2 lg:order-2 lg:overflow-y-auto lg:gap-3" aria-label="JARVIS">
+        <section className="order-1 flex min-h-0 min-w-0 flex-col items-center justify-center gap-2 py-2 lg:order-2 lg:overflow-y-auto lg:gap-3" aria-label="AFAIK">
           <div className="w-[min(78vw,340px)] sm:w-[min(60vw,420px)] lg:w-[max(180px,min(100%,calc(100dvh-35rem),620px))] lg:shrink-0">
-            <JarvisCore state={assistant.state} pulse={assistant.speechPulse} booting={assistant.booting} partyMode={session.partyMode} />
+            <AfaikCore state={assistant.state} pulse={assistant.speechPulse} booting={assistant.booting} partyMode={session.partyMode} />
           </div>
           <p
             className={`font-display text-xs tracking-[0.4em] uppercase ${assistant.state === 'error' ? 'text-warn' : 'text-arc-bright'}`}

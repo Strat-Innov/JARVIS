@@ -1,6 +1,6 @@
 import { CheckCircle2, Radar, XCircle } from 'lucide-react';
 import { DIAGNOSTIC_COLORS, DIAGNOSTIC_LABELS, REPAIR_COLORS, REPAIR_LABELS } from '../components/suitDisplay';
-import type { Suit } from '../types/jarvis';
+import type { Suit } from '../types/afaik';
 import { formatCountdown, getRepairRemainingMs } from '../utils/time';
 
 export interface BrowserCapabilities {

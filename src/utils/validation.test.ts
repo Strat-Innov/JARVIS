@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDemoSuits } from '../data/demoData';
 import { loadSession, loadSettings, loadSuits, resetSuits, saveSettings, saveSuits, STORAGE_KEYS, type KeyValueStore } from '../data/persistence';
-import type { Suit } from '../types/jarvis';
+import type { Suit } from '../types/afaik';
 import { DEFAULT_SETTINGS, hasErrors, sanitizeSettings, sanitizeSuit, validateSuit } from './validation';
 
 const NOW = Date.UTC(2026, 9, 31, 18, 0);

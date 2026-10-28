@@ -1,4 +1,4 @@
-/** Shared domain types for the JARVIS application. */
+/** Shared domain types for the AFAIK application. */
 
 export const REPAIR_STATUSES = ['operational', 'repairing', 'damaged', 'offline'] as const;
 export type RepairStatus = (typeof REPAIR_STATUSES)[number];
@@ -8,7 +8,7 @@ export type DiagnosticStatus = (typeof DIAGNOSTIC_STATUSES)[number];
 
 /**
  * A suit record. All telemetry is simulated, user-configured data.
- * Nullable fields mean "not recorded" — JARVIS must say so rather than guess.
+ * Nullable fields mean "not recorded" — AFAIK must say so rather than guess.
  */
 export interface Suit {
   id: string;

@@ -165,7 +165,7 @@ export function startRecognition(callbacks: RecognitionCallbacks, options: Recog
   try {
     recognition.start();
   } catch (error) {
-    console.warn('[jarvis] Recognition failed to start', error);
+    console.warn('[afaik] Recognition failed to start', error);
     callbacks.onError?.('unknown');
     callbacks.onEnd?.();
     return null;

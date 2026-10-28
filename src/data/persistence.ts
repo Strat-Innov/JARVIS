@@ -1,12 +1,12 @@
 /** localStorage persistence for suits, settings and session state. All access is guarded. */
-import type { SessionState, Settings, Suit } from '../types/jarvis';
+import type { SessionState, Settings, Suit } from '../types/afaik';
 import { DEFAULT_SETTINGS, sanitizeSettings, sanitizeSuits } from '../utils/validation';
 import { createDemoSuits, PRIMARY_SUIT_ID } from './demoData';
 
 export const STORAGE_KEYS = {
-  suits: 'jarvis.suits.v1',
-  settings: 'jarvis.settings.v1',
-  session: 'jarvis.session.v1',
+  suits: 'afaik.suits.v1',
+  settings: 'afaik.settings.v1',
+  session: 'afaik.session.v1',
 } as const;
 
 export type KeyValueStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
@@ -35,7 +35,7 @@ function writeJson(key: string, value: unknown, store: KeyValueStore | null): bo
     store.setItem(key, JSON.stringify(value));
     return true;
   } catch (error) {
-    console.warn(`[jarvis] Could not persist ${key}`, error);
+    console.warn(`[afaik] Could not persist ${key}`, error);
     return false;
   }
 }

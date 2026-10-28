@@ -1,6 +1,6 @@
 import { Activity, BatteryMedium, Gauge, HelpCircle, PartyPopper, Radar, Settings, Timer, Wrench } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type { Suit, View } from '../types/jarvis';
+import type { Suit, View } from '../types/afaik';
 import { REPAIR_COLORS, REPAIR_LABELS } from './suitDisplay';
 
 interface CommandPanelProps {

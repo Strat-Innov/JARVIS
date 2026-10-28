@@ -1,7 +1,7 @@
 import { memo } from 'react';
-import type { AssistantState } from '../types/jarvis';
+import type { AssistantState } from '../types/afaik';
 
-interface JarvisCoreProps {
+interface AfaikCoreProps {
   state: AssistantState;
   /** Increments on speech word boundaries to flash the reactor in time with speech. */
   pulse: number;
@@ -57,7 +57,7 @@ const STATE_LABELS: Record<AssistantState, string> = {
 };
 
 /** The animated arc-reactor-style core. All animation is CSS; state is exposed via data attributes. */
-function JarvisCoreImpl({ state, pulse, booting, partyMode }: JarvisCoreProps) {
+function AfaikCoreImpl({ state, pulse, booting, partyMode }: AfaikCoreProps) {
   return (
     <div
       className="core relative aspect-square w-full"
@@ -65,7 +65,7 @@ function JarvisCoreImpl({ state, pulse, booting, partyMode }: JarvisCoreProps) {
       data-booting={booting}
       data-party={partyMode}
       role="img"
-      aria-label={`JARVIS core — ${STATE_LABELS[state]}`}
+      aria-label={`AFAIK core — ${STATE_LABELS[state]}`}
     >
       <div
         aria-hidden
@@ -175,5 +175,5 @@ function JarvisCoreImpl({ state, pulse, booting, partyMode }: JarvisCoreProps) {
   );
 }
 
-export const JarvisCore = memo(JarvisCoreImpl);
+export const AfaikCore = memo(AfaikCoreImpl);
 export { STATE_LABELS };

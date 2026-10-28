@@ -1,5 +1,5 @@
 import { Keyboard, Mic, Volume2 } from 'lucide-react';
-import type { HistoryEntry } from '../types/jarvis';
+import type { HistoryEntry } from '../types/afaik';
 
 interface CommandHistoryProps {
   history: HistoryEntry[];

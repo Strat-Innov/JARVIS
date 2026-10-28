@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createDemoSuits, PRIMARY_SUIT_ID } from '../data/demoData';
-import type { Suit } from '../types/jarvis';
+import type { Suit } from '../types/afaik';
 import { durations } from '../utils/time';
 import { processCommand, type ResponseContext } from './responseEngine';
 
@@ -17,7 +17,7 @@ function withSuit(patch: Partial<Suit>): Suit[] {
 
 describe('repair estimates', () => {
   it('answers the Mark XLIII repair query from configured data', () => {
-    const { response } = processCommand('JARVIS, how long for the repair for the Mark XLIII?', context());
+    const { response } = processCommand('AFAIK, how long for the repair for the Mark XLIII?', context());
     expect(response.display).toContain('Mark XLIII');
     expect(response.display).toContain('two hours and forty minutes');
     expect(response.display).toContain('68% complete');

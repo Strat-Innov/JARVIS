@@ -8,27 +8,29 @@ const intentOf = (text: string) => interpretCommand(text, ctx).intent;
 
 describe('normalizeCommand', () => {
   it('strips punctuation, case and a leading or trailing wake word', () => {
-    expect(normalizeCommand('JARVIS, status report.')).toBe('status report');
-    expect(normalizeCommand('Hey Jarvis — what’s the time?')).toBe('whats the time');
-    expect(normalizeCommand('Status report, JARVIS')).toBe('status report');
+    expect(normalizeCommand('AFAIK, status report.')).toBe('status report');
+    expect(normalizeCommand('Hey A.F.A.I.K. — what’s the time?')).toBe('whats the time');
+    expect(normalizeCommand('Status report, afaik')).toBe('status report');
   });
 
   it('keeps the wake word when it is part of the sentence', () => {
-    expect(normalizeCommand('What does Jarvis stand for?')).toBe('what does jarvis stand for');
+    expect(normalizeCommand('What does AFAIK stand for?')).toBe('what does afaik stand for');
   });
 });
 
 describe('containsWakeWord', () => {
   it('detects common recognitions of the wake word', () => {
-    expect(containsWakeWord('ok Jarvis run diagnostics')).toBe(true);
-    expect(containsWakeWord('Jervis are you there')).toBe(true);
+    expect(containsWakeWord('ok AFAIK run diagnostics')).toBe(true);
+    expect(containsWakeWord('A.F.A.I.K. are you there')).toBe(true);
+    expect(containsWakeWord('a f a i k status report')).toBe(true);
     expect(containsWakeWord('run diagnostics')).toBe(false);
+    expect(containsWakeWord('a fake moustache')).toBe(false);
   });
 });
 
 describe('interpretCommand — required commands', () => {
   it.each([
-    ['JARVIS, status report.', 'status_report'],
+    ['AFAIK, status report.', 'status_report'],
     ['How long for the repair for the Mark XLIII?', 'repair_estimate'],
     ["What's the status of the Mark XLIII?", 'suit_status'],
     ['Run diagnostics.', 'diagnostics'],
@@ -62,8 +64,10 @@ describe('interpretCommand — phrasing variations', () => {
     ['Say hello to everyone', 'welcome_guests'],
     ['Tell me a joke', 'joke'],
     ['What time is it?', 'time'],
-    ['Good evening Jarvis', 'greeting'],
-    ['Jarvis', 'greeting'],
+    ['Good evening AFAIK', 'greeting'],
+    ['AFAIK', 'greeting'],
+    ['A F A I K?', 'greeting'],
+    ['What does AFAIK stand for?', 'easter_egg'],
     ['Which suits do we have?', 'list_suits'],
     ['I am Iron Man', 'easter_egg'],
     ['Happy Halloween!', 'easter_egg'],

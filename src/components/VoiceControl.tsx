@@ -1,7 +1,7 @@
 import { Mic, MicOff, SendHorizontal, Square } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import type { VoiceAssistant } from '../hooks/useVoiceAssistant';
-import type { ActivationMode } from '../types/jarvis';
+import type { ActivationMode } from '../types/afaik';
 
 interface VoiceControlProps {
   assistant: VoiceAssistant;
@@ -11,7 +11,7 @@ interface VoiceControlProps {
 const START_LABELS: Record<ActivationMode, string> = {
   'push-to-talk': 'Push to talk',
   conversation: 'Start conversation',
-  'wake-word': 'Listen for “JARVIS”',
+  'wake-word': 'Listen for “AFAIK”',
 };
 
 export function VoiceControl({ assistant, activationMode }: VoiceControlProps) {

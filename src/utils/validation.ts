@@ -8,7 +8,7 @@ import {
   type RepairStatus,
   type Settings,
   type Suit,
-} from '../types/jarvis';
+} from '../types/afaik';
 
 export type SuitFieldErrors = Partial<Record<keyof Suit, string>>;
 

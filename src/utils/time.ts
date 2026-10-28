@@ -101,7 +101,8 @@ export function toSpeakable(text: string): string {
       return n === null ? whole : `Mark ${numberToWords(n)}`;
     })
     .replace(/(\d+(?:\.\d+)?)\s?%/g, '$1 percent')
-    .replace(/J\.A\.R\.V\.I\.S\./g, 'Jarvis');
+    // Spell the assistant's name out so voices don't read it as a word.
+    .replace(/\bA\.?F\.?A\.?I\.?K\b\.?/g, 'A. F. A. I. K.');
 }
 
 /** Milliseconds until repair completion, or null when no completion time is configured or it is invalid. */

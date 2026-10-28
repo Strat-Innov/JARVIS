@@ -4,7 +4,7 @@
  * Facts (repair times, power, diagnostics) come only from the configured suit data.
  * Randomness is limited to phrasing and clearly humorous party-mode lines.
  */
-import type { AssistantAction, AssistantResponse, CommandOutcome, Interpretation, Suit } from '../types/jarvis';
+import type { AssistantAction, AssistantResponse, CommandOutcome, Interpretation, Suit } from '../types/afaik';
 import { formatClockTime, formatDurationSpoken, getRepairRemainingMs, toSpeakable } from '../utils/time';
 import { interpretCommand, type InterpreterContext } from './commandInterpreter';
 
@@ -51,7 +51,7 @@ const PARTY_DIAGNOSTIC_ASIDES = [
   'Also, the punch bowl is holding steady. I am choosing not to analyse its contents.',
 ];
 const WELCOME = [
-  'Good evening, everyone, and welcome. I am JARVIS. Please enjoy yourselves — and do try not to touch the suits.',
+  'Good evening, everyone, and welcome. I am AFAIK. Please enjoy yourselves — and do try not to touch the suits.',
   'Ladies and gentlemen, welcome. The workshop is open, the suits are on display, and I am monitoring everything. Have a wonderful evening.',
 ];
 const PARTY_WELCOME = [
@@ -67,7 +67,7 @@ const EASTER_EGGS: Record<string, readonly string[]> = {
   pod_bay: ['Wrong film, sir. But I do appreciate the reference.'],
   coffee: ['I would, sir, but my beverage subroutines were never installed. Perhaps one of your guests could oblige.'],
   dance: ['I am afraid I do not dance, sir. I do, however, compute rhythm with tremendous precision.'],
-  acronym: ['Just A Rather Very Intelligent System, sir.'],
+  acronym: ['As Far As I Know, sir. Which, where the suits are concerned, is precisely what the Workshop records say. Nothing more.'],
 };
 
 /* ------------------------------------------------------------- suit phrases */
@@ -285,7 +285,7 @@ export function generateResponse(interpretation: Interpretation, ctx: ResponseCo
 
     case 'identity':
       return reply(
-        'I am JARVIS. Just A Rather Very Intelligent System. I look after the workshop, monitor the suits, and occasionally keep you out of trouble, sir.',
+        'I am AFAIK. As Far As I Know. I look after the workshop, monitor the suits, and occasionally keep you out of trouble, sir.',
       );
 
     case 'easter_egg': {

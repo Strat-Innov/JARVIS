@@ -4,7 +4,7 @@
  * Normalises recognised speech or typed text and matches it against an ordered registry of
  * intent patterns. No LLM, no network, and nothing derived from the input is ever executed.
  */
-import type { Intent, Interpretation, Suit } from '../types/jarvis';
+import type { Intent, Interpretation, Suit } from '../types/afaik';
 import { markNumberFromDesignation, numberToRoman, parseMarkNumber } from '../utils/time';
 
 export interface InterpreterContext {
@@ -12,8 +12,11 @@ export interface InterpreterContext {
   selectedSuitId: string | null;
 }
 
-/** Common speech-recognition spellings of the wake word. */
-export const WAKE_WORD_PATTERN = /\b(?:jarvis|jarvas|jarves|jervis|jarvus|jarvice)\b/;
+/**
+ * The wake word "AFAIK", spoken letter by letter. Recognisers return it as "AFAIK", "A.F.A.I.K."
+ * or "a f a i k"; text is lowercased with punctuation turned into spaces before matching.
+ */
+export const WAKE_WORD_PATTERN = /\b(?:afaik|a ?f ?a ?i ?k)\b/;
 
 const LEADING_FILLER = /^(?:(?:hey|ok|okay|hi|so|um|uh|right|now)\s+)*/;
 const WAKE_PREFIX = new RegExp(`^(?:(?:hey|ok|okay|hi)\\s+)?${WAKE_WORD_PATTERN.source}\\s*`);
@@ -34,7 +37,7 @@ export function normalizeCommand(text: string): string {
 
 /** True when the text contains the wake word anywhere. */
 export function containsWakeWord(text: string): boolean {
-  return WAKE_WORD_PATTERN.test(text.toLowerCase());
+  return WAKE_WORD_PATTERN.test(text.toLowerCase().replace(/[^a-z0-9]+/g, ' '));
 }
 
 const NUMBER_WORD =
@@ -86,7 +89,7 @@ const RULES: IntentRule[] = [
   { intent: 'easter_egg', easterEgg: 'pod_bay', patterns: [/\bpod bay doors?\b/] },
   { intent: 'easter_egg', easterEgg: 'coffee', patterns: [/\b(?:make|get|fetch|pour) me (?:a |some )?(?:coffee|drink|cocktail|tea|snack)\b/] },
   { intent: 'easter_egg', easterEgg: 'dance', patterns: [/\b(?:can you |do you )?dance\b/, /\bplay (?:some )?music\b/] },
-  { intent: 'easter_egg', easterEgg: 'acronym', patterns: [/\bwhat does (?:jarvis|your name) stand for\b/] },
+  { intent: 'easter_egg', easterEgg: 'acronym', patterns: [/\bwhat does (?:afaik|a ?f ?a ?i ?k|your name) stand for\b/] },
   {
     intent: 'party_off',
     patterns: [
@@ -184,7 +187,7 @@ export function interpretCommand(rawText: string, context: InterpreterContext): 
   if (!rawText.trim()) {
     return { ...base, intent: 'unknown', recognized: false, error: 'empty_input' };
   }
-  // A bare wake word ("JARVIS?") is a greeting.
+  // A bare wake word ("AFAIK?") is a greeting.
   if (!normalizedText) {
     return { ...base, intent: 'greeting', recognized: true };
   }

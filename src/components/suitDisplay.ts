@@ -1,5 +1,5 @@
 /** Shared labels and colours for suit statuses. */
-import type { DiagnosticStatus, RepairStatus } from '../types/jarvis';
+import type { DiagnosticStatus, RepairStatus } from '../types/afaik';
 
 export const REPAIR_LABELS: Record<RepairStatus, string> = {
   operational: 'Operational',

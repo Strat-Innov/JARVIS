@@ -4,7 +4,7 @@
  * FICTIONAL SAMPLE DATA: every value below is invented for party entertainment.
  * It is not real hardware telemetry. Edit it in the Workshop screen; changes persist in localStorage.
  */
-import type { Suit } from '../types/jarvis';
+import type { Suit } from '../types/afaik';
 import { durations } from '../utils/time';
 
 export const PRIMARY_SUIT_ID = 'mark-43';

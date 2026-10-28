@@ -1,7 +1,7 @@
 import { Plus, RotateCcw, Save, Timer, Trash2 } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { REPAIR_LABELS, DIAGNOSTIC_LABELS } from '../components/suitDisplay';
-import { DIAGNOSTIC_STATUSES, REPAIR_STATUSES, type DiagnosticStatus, type RepairStatus, type Suit } from '../types/jarvis';
+import { DIAGNOSTIC_STATUSES, REPAIR_STATUSES, type DiagnosticStatus, type RepairStatus, type Suit } from '../types/afaik';
 import { durations, formatCountdown, getRepairRemainingMs, isoToLocalInput, localInputToIso } from '../utils/time';
 import { hasErrors, validateSuit, type SuitFieldErrors } from '../utils/validation';
 
@@ -195,7 +195,7 @@ export function Workshop({ suits, selectedSuitId, now, onSelectSuit, onSaveSuit,
   return (
     <div className="space-y-5">
       <p className="text-sm text-haze">
-        Configure the data JARVIS reports. All values are simulated; JARVIS only speaks what is configured here and says “unavailable” for
+        Configure the data AFAIK reports. All values are simulated; AFAIK only speaks what is configured here and says “unavailable” for
         empty fields. Changes are saved in this browser.
       </p>
 

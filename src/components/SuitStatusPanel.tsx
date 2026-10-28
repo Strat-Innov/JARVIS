@@ -1,5 +1,5 @@
 import { Clock, Wrench } from 'lucide-react';
-import type { Suit } from '../types/jarvis';
+import type { Suit } from '../types/afaik';
 import { formatClockTime, formatCountdown, getRepairRemainingMs } from '../utils/time';
 import { REPAIR_COLORS, REPAIR_LABELS } from './suitDisplay';
 

@@ -1,7 +1,7 @@
 import { Database, Play, RotateCcw } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { VoicesState } from '../hooks/useVoices';
-import { ACTIVATION_MODES, type ActivationMode, type Settings as SettingsModel } from '../types/jarvis';
+import { ACTIVATION_MODES, type ActivationMode, type Settings as SettingsModel } from '../types/afaik';
 import { DEFAULT_SETTINGS, PITCH_RANGE, RATE_RANGE } from '../utils/validation';
 
 interface SettingsProps {
@@ -25,9 +25,9 @@ const MODE_INFO: Record<ActivationMode, { title: string; description: string }> 
     description: 'After each reply the microphone re-opens for the next command. Stops after a few seconds of silence or “Go to standby”.',
   },
   'wake-word': {
-    title: 'Wake word “JARVIS” (experimental)',
+    title: 'Wake word “AFAIK” (experimental)',
     description:
-      'Listens continuously and only responds to speech containing “JARVIS”. Chrome/Edge desktop only in practice; browsers stop continuous listening periodically and it restarts automatically, so occasional misses are expected.',
+      'Listens continuously and only responds to speech containing “AFAIK”, spelled out letter by letter. Chrome/Edge desktop only in practice; browsers stop continuous listening periodically and it restarts automatically, so occasional misses are expected.',
   },
 };
 

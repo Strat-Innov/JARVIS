@@ -5,7 +5,7 @@
  *                                                                     │
  *              conversation / wake-word modes re-open the microphone ─┘
  *
- * Recognition is always stopped before JARVIS speaks, so it never hears itself.
+ * Recognition is always stopped before AFAIK speaks, so it never hears itself.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { containsWakeWord, normalizeCommand } from '../services/commandInterpreter';
@@ -19,7 +19,7 @@ import {
   type RecognitionSession,
 } from '../services/speechRecognition';
 import { cancelSpeech, isSynthesisSupported, speak, unlockSynthesis } from '../services/speechSynthesis';
-import type { AssistantAction, AssistantState, HistoryEntry, Settings, Suit } from '../types/jarvis';
+import type { AssistantAction, AssistantState, HistoryEntry, Settings, Suit } from '../types/afaik';
 import { toSpeakable } from '../utils/time';
 
 export interface VoiceAssistantOptions {
@@ -138,7 +138,7 @@ export function useVoiceAssistant(options: VoiceAssistantOptions) {
               void runInputRef.current(text, 'voice');
               return;
             }
-            // Wake-word mode: only act on speech addressed to JARVIS, or a follow-up just after "JARVIS?".
+            // Wake-word mode: only act on speech addressed to AFAIK, or a follow-up just after "AFAIK?".
             if (Date.now() < awaitingUntilRef.current || containsWakeWord(text)) {
               awaitingUntilRef.current = 0;
               void runInputRef.current(text, 'voice');
@@ -210,7 +210,7 @@ export function useVoiceAssistant(options: VoiceAssistantOptions) {
       if (!mountedRef.current) return;
       const mode = latest.current.settings.activationMode;
       if (listenAfterSpeechRef.current) {
-        // The user pressed the microphone while JARVIS was talking.
+        // The user pressed the microphone while AFAIK was talking.
         listenAfterSpeechRef.current = false;
         startSession(mode === 'wake-word' ? 'wake' : 'command');
         return;
@@ -303,7 +303,7 @@ export function useVoiceAssistant(options: VoiceAssistantOptions) {
           await delay(600);
         }
       } catch (error) {
-        console.error('[jarvis] Command handling failed', error);
+        console.error('[afaik] Command handling failed', error);
         busyRef.current = false;
         showError('Something went wrong handling that command. Please try again.');
         return;
@@ -423,7 +423,7 @@ export function useVoiceAssistant(options: VoiceAssistantOptions) {
     recognitionSupported: isRecognitionSupported(),
     /** True while the microphone is on (a session is running or a hands-free mode is armed). */
     micOn,
-    /** True while wake-word mode is armed and waiting for "JARVIS". */
+    /** True while wake-word mode is armed and waiting for "AFAIK". */
     wakeArmed: handsFree && options.settings.activationMode === 'wake-word',
     handsFree,
     startListening,

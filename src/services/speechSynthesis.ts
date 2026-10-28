@@ -97,7 +97,7 @@ export function speak(text: string, options: SpeakOptions): Promise<void> {
       try {
         utterance.voice = options.voice;
       } catch (error) {
-        console.warn('[jarvis] Could not apply the selected voice; using the default.', error);
+        console.warn('[afaik] Could not apply the selected voice; using the default.', error);
       }
     }
     utterance.rate = options.rate;
@@ -120,7 +120,7 @@ export function speak(text: string, options: SpeakOptions): Promise<void> {
     utterance.onend = finish;
     utterance.onerror = (event) => {
       if (event.error !== 'interrupted' && event.error !== 'canceled') {
-        console.warn('[jarvis] Speech synthesis error:', event.error);
+        console.warn('[afaik] Speech synthesis error:', event.error);
       }
       finish();
     };
@@ -130,7 +130,7 @@ export function speak(text: string, options: SpeakOptions): Promise<void> {
       // Chrome can leave the queue paused after tab switches.
       if (synth.paused) synth.resume();
     } catch (error) {
-      console.warn('[jarvis] Speech synthesis failed', error);
+      console.warn('[afaik] Speech synthesis failed', error);
       finish();
     }
   });

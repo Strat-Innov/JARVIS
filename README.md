@@ -1,6 +1,6 @@
-# J.A.R.V.I.S. — Halloween Edition
+# A.F.A.I.K. — Halloween Edition
 
-A fan-made, JARVIS-inspired voice assistant for a Halloween costume party. You can talk to it (or type), and it answers in a calm British-style voice using **only the suit data you configure**. The demo suit is the Mark XLIII, and its repair countdown updates live.
+**AFAIK** (*As Far As I Know*) is a fan-made voice assistant for a Halloween costume party, inspired by Iron Man's JARVIS and branded for Filinvest Alabang Inc. You can talk to it (or type), and it answers in a calm British-style voice using **only the suit data you configure**. The demo suit is the Mark XLIII, and its repair countdown updates live.
 
 - **Client-side only.** React + Vite + TypeScript + Tailwind. There's no backend, database, account or API key.
 - **No paid AI.** A deterministic TypeScript command registry handles commands, using the browser's Web Speech APIs.
@@ -22,7 +22,7 @@ You need Node 20.19 or later.
 
 | Try saying (or typing) | What happens |
 |---|---|
-| "JARVIS, status report." | Roster summary plus the selected suit |
+| "AFAIK, status report." | Roster summary plus the selected suit |
 | "How long for the repair for the Mark XLIII?" | Repair ETA from the configured completion time |
 | "What's the status of the Mark 43?" | Repair, power and diagnostics |
 | "Run diagnostics." / "How much power remains?" | Uses the selected suit unless you name one |
@@ -30,7 +30,7 @@ You need Node 20.19 or later.
 | "Activate party mode." / "Deactivate party mode." | Party personality plus an initialization animation |
 | "Welcome our guests." · "Tell me a joke." · "What can you do?" · "Go to standby." | Party extras |
 
-You can say suit designations as "Mark XLIII", "Mark 43", "Mark forty-three" or "MK-43", or use the suit's name. If you ask about a suit that doesn't exist, JARVIS says it has no record of it. If a field is empty, JARVIS says that value is **unavailable** and doesn't guess one.
+You can say suit designations as "Mark XLIII", "Mark 43", "Mark forty-three" or "MK-43", or use the suit's name. If you ask about a suit that doesn't exist, AFAIK says it has no record of it. If a field is empty, AFAIK says that value is **unavailable** and doesn't guess one.
 
 **Workshop** (left panel → Systems) lets you edit each suit's status, progress, completion time, power, diagnostics and notes. You can set the completion time as a date/time or as "time remaining from now". Changes are saved in `localStorage`. **Reset to demo data** restores the defaults, including a fresh 2 h 40 m countdown for the Mark XLIII.
 
@@ -42,11 +42,13 @@ You can say suit designations as "Mark XLIII", "Mark 43", "Mark forty-three" or 
 |---|---|---|
 | Push to talk (default) | Press the mic and say one command | Best |
 | Conversation | The mic re-opens after each reply. It stops after silence or "Go to standby" | Good |
-| Wake word (experimental) | Listens continuously and responds only to phrases containing "JARVIS" | Chrome/Edge desktop. Occasional misses are expected |
+| Wake word (experimental) | Listens continuously and responds only to phrases containing "AFAIK", spelled out letter by letter | Chrome/Edge desktop. Occasional misses are expected |
 
-The microphone is only requested after you press the mic button. Recognition always stops while JARVIS speaks, so it never hears itself.
+The microphone is only requested after you press the mic button. Recognition always stops while AFAIK speaks, so it never hears itself.
 
 ## Browser limitations
+
+- **Wake word:** say "AFAIK" as letters ("A-F-A-I-K"). Recognisers handle spelled-out letters less reliably than a single word, so push to talk is the safest mode for the party.
 
 - **Speech recognition** works in Chrome, Edge and Safari. It is **not supported in Firefox**, where the text input still works. Chrome and Edge send audio to their cloud recogniser, so they **need an internet connection**.
 - The microphone needs **HTTPS** or `localhost`. Vercel provides HTTPS.
@@ -71,7 +73,7 @@ The app is a single page with no client-side routes, so no rewrite rules are nee
 
 ```
 src/
-  components/   Header, JarvisCore (SVG/CSS core), CommandPanel, SuitStatusPanel,
+  components/   Header, AfaikCore (SVG/CSS core), CommandPanel, SuitStatusPanel,
                 TelemetryPanel, VoiceControl, CommandHistory, Drawer
   pages/        Workshop, Diagnostics, Settings
   data/         demoData.ts (fictional sample suits), persistence.ts (localStorage)

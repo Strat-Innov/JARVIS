@@ -83,5 +83,6 @@ describe('numbers and designations', () => {
 
   it('makes designations speakable', () => {
     expect(toSpeakable('The Mark XLIII is at 74% power.')).toBe('The Mark forty-three is at 74 percent power.');
+    expect(toSpeakable('I am AFAIK. A.F.A.I.K. is online.')).toBe('I am A. F. A. I. K. A. F. A. I. K. is online.');
   });
 });
