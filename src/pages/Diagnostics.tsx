@@ -1,7 +1,6 @@
-import { CheckCircle2, Radar, XCircle } from 'lucide-react';
-import { DIAGNOSTIC_COLORS, DIAGNOSTIC_LABELS, REPAIR_COLORS, REPAIR_LABELS } from '../components/suitDisplay';
-import type { Suit } from '../types/afaik';
-import { formatCountdown, getRepairRemainingMs } from '../utils/time';
+import { CheckCircle2, XCircle } from 'lucide-react';
+import { brandsPageDoc, playbookDocs } from '../services/knowledgeStructure';
+import type { KnowledgeBase } from '../types/afaik';
 
 export interface BrowserCapabilities {
   recognition: boolean;
@@ -12,11 +11,8 @@ export interface BrowserCapabilities {
 }
 
 interface DiagnosticsProps {
-  suits: Suit[];
-  now: number;
-  busy: boolean;
+  knowledge: KnowledgeBase | null;
   capabilities: BrowserCapabilities;
-  onCommand: (text: string) => void;
 }
 
 function Check({ ok, label, detail }: { ok: boolean; label: string; detail: string }) {
@@ -31,61 +27,34 @@ function Check({ ok, label, detail }: { ok: boolean; label: string; detail: stri
   );
 }
 
-export function Diagnostics({ suits, now, busy, capabilities, onCommand }: DiagnosticsProps) {
+export function Diagnostics({ knowledge, capabilities }: DiagnosticsProps) {
+  const playbook = knowledge ? playbookDocs(knowledge) : null;
+  const brands = knowledge ? brandsPageDoc(knowledge) : undefined;
   return (
     <div className="space-y-6">
       <section>
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h3 className="hud-label">Suit diagnostics</h3>
-          <button type="button" className="hud-button text-sm" disabled={busy} onClick={() => onCommand('Status report')}>
-            Full status report
-          </button>
-        </div>
-        <ul className="space-y-2">
-          {suits.map((suit) => {
-            const remaining = getRepairRemainingMs(suit.repairCompletesAt, now);
-            return (
-              <li key={suit.id} className="border border-arc/15 bg-arc/5 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="font-display font-bold tracking-wider">{suit.name}</p>
-                    {suit.name !== suit.designation && <p className="font-mono text-xs text-haze">{suit.designation}</p>}
-                  </div>
-                  <button type="button" className="hud-button text-sm" disabled={busy} onClick={() => onCommand(`Run diagnostics on the ${suit.name}`)}>
-                    <Radar size={15} aria-hidden /> Run diagnostics
-                  </button>
-                </div>
-                <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
-                  <div>
-                    <dt className="text-haze">Repair</dt>
-                    <dd className="flex items-center gap-1.5">
-                      <span className="status-dot" style={{ background: REPAIR_COLORS[suit.repairStatus] }} aria-hidden />
-                      {REPAIR_LABELS[suit.repairStatus]}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-haze">Remaining</dt>
-                    <dd className="font-mono tabular-nums">
-                      {remaining === null ? 'Unavailable' : remaining > 0 ? formatCountdown(remaining) : 'Elapsed'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-haze">Power</dt>
-                    <dd className="font-mono">{suit.powerLevel === null ? 'Unavailable' : `${Math.round(suit.powerLevel)}%`}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-haze">Diagnostics</dt>
-                    <dd className="flex items-center gap-1.5">
-                      <span className="status-dot" style={{ background: DIAGNOSTIC_COLORS[suit.diagnosticStatus] }} aria-hidden />
-                      {DIAGNOSTIC_LABELS[suit.diagnosticStatus]}
-                    </dd>
-                  </div>
-                </dl>
-              </li>
-            );
-          })}
+        <h3 className="hud-label mb-2">Knowledge source check</h3>
+        <ul className="space-y-2.5">
+          <Check
+            ok={Boolean(knowledge)}
+            label="Knowledge file"
+            detail={knowledge ? `${knowledge.sourceName} — ${knowledge.docs.length} pages` : 'Not loaded on this device. Open the Library to load it.'}
+          />
+          {knowledge && (
+            <>
+              <Check
+                ok={Boolean(playbook && playbook.length > 0)}
+                label="Project Playbook"
+                detail={playbook ? `${playbook.length} projects listed — used for FAI project questions.` : 'Page not found — project lists are unavailable.'}
+              />
+              <Check
+                ok={Boolean(brands)}
+                label="Brands page"
+                detail={brands ? 'Found — used for Filigree, Prestige and Aspire (North/South) questions.' : 'Page not found — brand questions are unavailable.'}
+              />
+            </>
+          )}
         </ul>
-        {suits.length === 0 && <p className="text-haze">No suits on record.</p>}
       </section>
 
       <section>

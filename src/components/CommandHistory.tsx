@@ -24,7 +24,7 @@ export function CommandHistory({ history, interimTranscript, lastInput, micStatu
       <div className="min-w-0">
         <h2 className="hud-label mb-1">Command history</h2>
         {history.length === 0 ? (
-          <p className="text-sm text-haze">No commands yet. Try “Status report”.</p>
+          <p className="text-sm text-haze">No questions yet. Try “List the FAI projects”.</p>
         ) : (
           <ol className="max-h-28 space-y-1 overflow-y-auto pr-1 text-sm">
             {history.map((h) => (

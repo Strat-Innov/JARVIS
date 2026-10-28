@@ -19,13 +19,12 @@ import {
   type RecognitionSession,
 } from '../services/speechRecognition';
 import { cancelSpeech, isSynthesisSupported, speak, unlockSynthesis } from '../services/speechSynthesis';
-import type { AssistantAction, AssistantState, HistoryEntry, Settings, Suit } from '../types/afaik';
-import { toSpeakable } from '../utils/time';
+import type { AssistantAction, AssistantState, HistoryEntry, KnowledgeBase, Settings } from '../types/afaik';
+import { toSpeakable } from '../utils/text';
 
 export interface VoiceAssistantOptions {
-  suits: Suit[];
-  selectedSuitId: string | null;
-  partyMode: boolean;
+  knowledge: KnowledgeBase | null;
+  selectedDocId: string | null;
   settings: Settings;
   voice: SpeechSynthesisVoice | null;
   onAction: (action: AssistantAction) => void;
@@ -250,16 +249,10 @@ export function useVoiceAssistant(options: VoiceAssistantOptions) {
       setState('processing');
 
       try {
-        const { suits, selectedSuitId, partyMode } = latest.current;
-        const { interpretation, response } = processCommand(trimmed, { suits, selectedSuitId, partyMode, now });
+        const { knowledge, selectedDocId } = latest.current;
+        const { interpretation, response } = processCommand(trimmed, { knowledge, selectedDocId, now });
 
-        if (response.bootSequence) {
-          setBooting(true);
-          sfx('boot');
-          window.setTimeout(() => mountedRef.current && setBooting(false), BOOT_ANIMATION_MS);
-        } else {
-          sfx('acknowledge');
-        }
+        sfx('acknowledge');
 
         await delay(response.processingMs);
         if (!mountedRef.current) {
@@ -368,6 +361,13 @@ export function useVoiceAssistant(options: VoiceAssistantOptions) {
   /** Stops speech immediately. */
   const interrupt = useCallback(() => cancelSpeech(), []);
 
+  /** Plays the core's initialisation sweep, e.g. after the knowledge base loads. */
+  const playBootSequence = useCallback(() => {
+    setBooting(true);
+    sfx('boot');
+    window.setTimeout(() => mountedRef.current && setBooting(false), BOOT_ANIMATION_MS);
+  }, [sfx]);
+
   /** Speaks arbitrary text (used by the voice test in Settings). */
   const speakText = useCallback(async (text: string, voiceOverride?: SpeechSynthesisVoice | null) => {
     if (busyRef.current || !isSynthesisSupported()) return;
@@ -432,6 +432,7 @@ export function useVoiceAssistant(options: VoiceAssistantOptions) {
     submitText,
     interrupt,
     speakText,
+    playBootSequence,
   };
 }
 

@@ -1,14 +1,14 @@
 {
-  "name": "afaik-halloween",
+  "name": "afaik",
   "private": true,
   "version": "1.0.0",
-  "description": "A JARVIS-inspired voice assistant web app for a Halloween costume party. Client-side only, no paid APIs.",
+  "description": "AFAIK \u2014 a voice-enabled FAI knowledge assistant that answers only from a locally loaded knowledge file. Client-side only, no paid APIs.",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^22.20.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",

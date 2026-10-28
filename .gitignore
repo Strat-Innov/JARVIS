@@ -4,3 +4,10 @@ dist
 .vercel
 .DS_Store
 coverage
+
+# Company knowledge exports must never be committed (the repo is public)
+KNOWLEDGE-*
+*.zip
+*_AI_File.md
+*_Master_File.md
+knowledge/

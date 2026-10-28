@@ -1,24 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AfaikCore, STATE_LABELS } from './components/AfaikCore';
 import { CommandHistory } from './components/CommandHistory';
-import { CommandPanel } from './components/CommandPanel';
+import { DocumentPanel } from './components/DocumentPanel';
 import { Drawer } from './components/Drawer';
 import { Header } from './components/Header';
-import { AfaikCore, STATE_LABELS } from './components/AfaikCore';
-import { SuitStatusPanel } from './components/SuitStatusPanel';
-import { TelemetryPanel } from './components/TelemetryPanel';
+import { KnowledgePanel } from './components/KnowledgePanel';
 import { VoiceControl } from './components/VoiceControl';
-import { loadSession, loadSettings, loadSuits, resetSuits, saveSession, saveSettings, saveSuits } from './data/persistence';
+import { clearStoredKnowledge, loadSession, loadSettings, loadStoredKnowledge, saveSession, saveSettings, saveStoredKnowledge } from './data/persistence';
 import { useNow } from './hooks/useNow';
 import { useVoiceAssistant } from './hooks/useVoiceAssistant';
 import { useVoices } from './hooks/useVoices';
 import { Diagnostics, type BrowserCapabilities } from './pages/Diagnostics';
+import { Library } from './pages/Library';
 import { Settings } from './pages/Settings';
-import { Workshop } from './pages/Workshop';
-import type { ActivityEntry, AssistantAction, SessionState, Settings as SettingsModel, Suit, View } from './types/afaik';
+import { readKnowledgeFile } from './services/knowledgeFile';
+import { parseKnowledgeMarkdown } from './services/knowledgeParser';
+import { brandOfDoc } from './services/knowledgeStructure';
+import type { ActivityEntry, AssistantAction, KnowledgeBase, KnowledgeCategory, SessionState, Settings as SettingsModel, View } from './types/afaik';
 
 const MAX_ACTIVITY = 30;
-const VIEW_TITLES: Record<Exclude<View, 'hud'>, string> = { workshop: 'Workshop', diagnostics: 'Diagnostics', settings: 'Settings' };
-const VOICE_TEST_LINE = 'Good evening, sir. Voice systems are online. The Mark XLIII awaits your inspection.';
+const VIEW_TITLES: Record<Exclude<View, 'hud'>, string> = { library: 'Library', diagnostics: 'Diagnostics', settings: 'Settings' };
+const VOICE_TEST_LINE = 'Good day. AFAIK voice systems are online.';
 
 function storageAvailable(): boolean {
   try {
@@ -37,83 +39,92 @@ const newEntry = (message: string): ActivityEntry => ({
   message,
 });
 
+/** Restores the knowledge file saved in this browser, if any. */
+function restoreKnowledge(): KnowledgeBase | null {
+  const stored = loadStoredKnowledge();
+  if (!stored) return null;
+  try {
+    return parseKnowledgeMarkdown(stored.markdown, stored.sourceName, stored.loadedAt);
+  } catch (error) {
+    console.warn('[afaik] Saved knowledge file could not be parsed', error);
+    return null;
+  }
+}
+
 export default function App() {
   const now = useNow(1000);
-  const [suits, setSuits] = useState<Suit[]>(() => loadSuits());
+  const [knowledge, setKnowledge] = useState<KnowledgeBase | null>(restoreKnowledge);
+  const [persisted, setPersisted] = useState(true);
   const [settings, setSettings] = useState<SettingsModel>(() => loadSettings());
   const [session, setSession] = useState<SessionState>(() => loadSession());
   const [view, setView] = useState<View>('hud');
-  const [activity, setActivity] = useState<ActivityEntry[]>(() => [newEntry('A.F.A.I.K. online. All systems initialised.')]);
-  const [diagnosticRuns, setDiagnosticRuns] = useState<Record<string, number>>({});
+  const [activity, setActivity] = useState<ActivityEntry[]>(() => [
+    newEntry(knowledge ? `AFAIK online. Knowledge source: ${knowledge.docs.length} pages.` : 'AFAIK online. No knowledge source loaded.'),
+  ]);
 
-  useEffect(() => void saveSuits(suits), [suits]);
   useEffect(() => void saveSettings(settings), [settings]);
   useEffect(() => void saveSession(session), [session]);
 
-  // Keep the selection valid if the selected suit is deleted.
-  const selectedSuit = suits.find((s) => s.id === session.selectedSuitId) ?? suits[0];
-  const selectedSuitId = selectedSuit?.id ?? null;
-
+  const selectedDoc = knowledge?.docs.find((d) => d.id === session.selectedDocId);
   const log = useCallback((message: string) => setActivity((a) => [newEntry(message), ...a].slice(0, MAX_ACTIVITY)), []);
-  const suitName = useCallback((id: string) => suits.find((s) => s.id === id)?.name ?? 'suit', [suits]);
 
-  const selectSuit = useCallback((suitId: string) => setSession((s) => ({ ...s, selectedSuitId: suitId })), []);
+  const selectDoc = useCallback(
+    (docId: string) => {
+      const doc = knowledge?.docs.find((d) => d.id === docId);
+      setSession((s) => ({ ...s, selectedDocId: docId, selectedCategory: doc?.category ?? s.selectedCategory }));
+    },
+    [knowledge],
+  );
+  const selectCategory = useCallback((category: KnowledgeCategory) => setSession((s) => ({ ...s, selectedCategory: category })), []);
 
   const handleAction = useCallback(
     (action: AssistantAction) => {
       switch (action.type) {
-        case 'select-suit':
-          selectSuit(action.suitId);
+        case 'select-doc':
+          selectDoc(action.docId);
           break;
-        case 'set-party-mode':
-          setSession((s) => ({ ...s, partyMode: action.enabled }));
-          log(action.enabled ? 'Party protocol engaged.' : 'Party protocol disengaged.');
+        case 'select-category':
+          selectCategory(action.category);
           break;
         case 'standby':
           log('Entered standby.');
           break;
-        case 'diagnostics-run':
-          setDiagnosticRuns((d) => ({ ...d, [action.suitId]: Date.now() }));
-          log(`Diagnostics run on ${suitName(action.suitId)}.`);
-          break;
       }
     },
-    [log, selectSuit, suitName],
+    [log, selectCategory, selectDoc],
   );
 
   const voices = useVoices(settings.voiceURI);
   const assistant = useVoiceAssistant({
-    suits,
-    selectedSuitId,
-    partyMode: session.partyMode,
+    knowledge,
+    selectedDocId: selectedDoc?.id ?? null,
     settings,
     voice: voices.activeVoice,
     onAction: handleAction,
   });
   const busy = assistant.state === 'processing' || assistant.state === 'speaking';
+  const { playBootSequence } = assistant;
 
-  const saveSuit = useCallback(
-    (suit: Suit) => {
-      setSuits((list) => (list.some((s) => s.id === suit.id) ? list.map((s) => (s.id === suit.id ? suit : s)) : [...list, suit]));
-      selectSuit(suit.id);
-      log(`Workshop records updated for ${suit.name}.`);
+  const loadKnowledgeFile = useCallback(
+    async (file: File) => {
+      const { markdown, sourceName } = await readKnowledgeFile(file);
+      const kb = parseKnowledgeMarkdown(markdown, sourceName);
+      const saved = saveStoredKnowledge({ markdown, sourceName, loadedAt: kb.loadedAt });
+      setPersisted(saved);
+      setKnowledge(kb);
+      setSession((s) => ({ ...s, selectedDocId: null }));
+      log(`Knowledge source loaded: ${sourceName} (${kb.docs.length} pages)${saved ? '' : ' — not saved; reload needed after refresh'}.`);
+      playBootSequence();
     },
-    [log, selectSuit],
+    [log, playBootSequence],
   );
-  const deleteSuit = useCallback(
-    (id: string) => {
-      log(`${suitName(id)} removed from the roster.`);
-      setSuits((list) => list.filter((s) => s.id !== id));
-    },
-    [log, suitName],
-  );
-  const resetDemo = useCallback(() => {
-    const demo = resetSuits();
-    setSuits(demo);
-    setDiagnosticRuns({});
-    if (demo[0]) selectSuit(demo[0].id);
-    log('Suit data reset to demo configuration.');
-  }, [log, selectSuit]);
+
+  const clearKnowledge = useCallback(() => {
+    clearStoredKnowledge();
+    setKnowledge(null);
+    setSession((s) => ({ ...s, selectedDocId: null }));
+    log('Knowledge source removed from this device.');
+  }, [log]);
 
   const closeDrawer = useCallback(() => setView('hud'), []);
 
@@ -131,12 +142,14 @@ export default function App() {
   const availability =
     assistant.state === 'error'
       ? { label: 'ATTENTION', tone: 'warn' as const }
-      : assistant.recognitionSupported
-        ? { label: 'ONLINE', tone: 'ok' as const }
-        : { label: 'TEXT MODE', tone: 'warn' as const };
+      : !knowledge
+        ? { label: 'NO SOURCE', tone: 'warn' as const }
+        : assistant.recognitionSupported
+          ? { label: 'ONLINE', tone: 'ok' as const }
+          : { label: 'TEXT MODE', tone: 'warn' as const };
 
   const micStatus = !assistant.recognitionSupported
-    ? 'Voice input unavailable — type commands'
+    ? 'Voice input unavailable — type questions'
     : assistant.wakeArmed
       ? 'Wake word armed — say “AFAIK”'
       : assistant.micOn
@@ -155,49 +168,77 @@ export default function App() {
   const displayText =
     assistant.state === 'error' && assistant.errorMessage
       ? assistant.errorMessage
-      : assistant.responseText || 'Good evening. A.F.A.I.K. is online. Press the microphone or type a command to begin.';
+      : assistant.responseText ||
+        (knowledge
+          ? 'AFAIK is online. Ask about FAI projects, buildings, departments, people or procedures.'
+          : 'AFAIK is online. Load the FAI knowledge file to begin — open the Library or use the panel on the right.');
+
+  // Multi-line answers (tables, lists, people) get a scrollable, left-aligned answer panel and a smaller core.
+  const structured = displayText.includes('\n') || displayText.length > 240;
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-[1920px] flex-col gap-3 p-2 sm:p-3 lg:h-dvh lg:p-4">
-      <Header now={now} availability={availability} partyMode={session.partyMode} onOpenSettings={() => setView('settings')} />
+      <Header
+        now={now}
+        availability={availability}
+        knowledgeLabel={knowledge ? `${knowledge.docs.length} pages` : null}
+        onOpenSettings={() => setView('settings')}
+      />
 
-      <main className="grid flex-1 gap-3 lg:min-h-0 lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)_minmax(270px,340px)]">
-        <aside className="order-3 min-w-0 lg:order-1 lg:overflow-y-auto" aria-label="Controls">
-          <CommandPanel
-            suits={suits}
-            selectedSuitId={selectedSuitId}
-            partyMode={session.partyMode}
+      <main className="grid flex-1 gap-3 lg:min-h-0 lg:grid-cols-[minmax(250px,300px)_minmax(0,1fr)_minmax(290px,380px)]">
+        <aside className="order-3 min-w-0 lg:order-1 lg:min-h-0" aria-label="Knowledge navigation">
+          <KnowledgePanel
+            knowledge={knowledge}
+            selectedDocId={selectedDoc?.id ?? null}
+            category={session.selectedCategory}
             view={view}
             busy={busy}
-            onSelectSuit={selectSuit}
+            onSelectCategory={selectCategory}
+            onSelectDoc={selectDoc}
             onCommand={assistant.submitText}
             onNavigate={setView}
           />
         </aside>
 
-        <section className="order-1 flex min-h-0 min-w-0 flex-col items-center justify-center gap-2 py-2 lg:order-2 lg:overflow-y-auto lg:gap-3" aria-label="AFAIK">
-          <div className="w-[min(78vw,340px)] sm:w-[min(60vw,420px)] lg:w-[max(180px,min(100%,calc(100dvh-35rem),620px))] lg:shrink-0">
-            <AfaikCore state={assistant.state} pulse={assistant.speechPulse} booting={assistant.booting} partyMode={session.partyMode} />
-          </div>
-          <p
-            className={`font-display text-xs tracking-[0.4em] uppercase ${assistant.state === 'error' ? 'text-warn' : 'text-arc-bright'}`}
-            aria-live="polite"
+        <section
+          className={`order-1 flex min-h-0 min-w-0 flex-col items-center gap-2 py-2 lg:order-2 lg:gap-3 ${structured ? 'justify-start' : 'justify-center'}`}
+          aria-label="AFAIK"
+        >
+          <div
+            className={`shrink-0 transition-[width] duration-500 ${
+              structured
+                ? 'w-[min(40vw,180px)] lg:w-[max(140px,min(100%,calc(100dvh-44rem),240px))]'
+                : 'w-[min(70vw,300px)] sm:w-[min(50vw,360px)] lg:w-[max(160px,min(100%,calc(100dvh-36rem),520px))]'
+            }`}
           >
+            <AfaikCore state={assistant.state} pulse={assistant.speechPulse} booting={assistant.booting} />
+          </div>
+          <p className={`font-display text-xs tracking-[0.4em] uppercase ${assistant.state === 'error' ? 'text-warn' : 'text-arc-bright'}`} aria-live="polite">
             {assistant.wakeArmed && assistant.state === 'standby' ? 'Awaiting wake word' : STATE_LABELS[assistant.state]}
           </p>
-          <p
-            className={`min-h-[2.6em] max-w-3xl px-2 text-center text-lg leading-snug sm:text-xl lg:text-2xl ${assistant.state === 'error' ? 'text-warn' : 'text-ice'}`}
+          <div
+            className={`w-full max-w-3xl leading-snug whitespace-pre-line ${assistant.state === 'error' ? 'text-warn' : 'text-ice'} ${
+              structured
+                ? 'hud-panel max-h-[55dvh] overflow-y-auto px-4 py-3 text-left text-sm sm:text-base lg:max-h-none lg:min-h-0 lg:flex-1'
+                : 'px-2 text-center text-base sm:text-lg lg:text-xl'
+            }`}
             aria-live="polite"
+            tabIndex={structured ? 0 : undefined}
           >
             {displayText}
-          </p>
+          </div>
           {assistant.state !== 'error' && assistant.errorMessage && <p className="text-sm text-warn">{assistant.errorMessage}</p>}
           <VoiceControl assistant={assistant} activationMode={settings.activationMode} />
         </section>
 
-        <aside className="order-2 flex min-w-0 flex-col gap-3 lg:order-3 lg:overflow-y-auto" aria-label="Suit telemetry">
-          <SuitStatusPanel suit={selectedSuit} now={now} />
-          <TelemetryPanel suit={selectedSuit} activity={activity} lastDiagnosticAt={selectedSuitId ? diagnosticRuns[selectedSuitId] : undefined} />
+        <aside className="order-2 min-w-0 lg:order-3 lg:min-h-0" aria-label="Selected page">
+          <DocumentPanel
+            doc={selectedDoc}
+            brand={knowledge && selectedDoc ? brandOfDoc(knowledge, selectedDoc.id) : null}
+            hasKnowledge={Boolean(knowledge)}
+            activity={activity}
+            onLoadKnowledge={loadKnowledgeFile}
+          />
         </aside>
       </main>
 
@@ -211,18 +252,19 @@ export default function App() {
 
       {view !== 'hud' && (
         <Drawer title={VIEW_TITLES[view]} onClose={closeDrawer}>
-          {view === 'workshop' && (
-            <Workshop
-              suits={suits}
-              selectedSuitId={selectedSuitId}
-              now={now}
-              onSelectSuit={selectSuit}
-              onSaveSuit={saveSuit}
-              onDeleteSuit={deleteSuit}
-              onResetDemo={resetDemo}
+          {view === 'library' && (
+            <Library
+              knowledge={knowledge}
+              persisted={persisted}
+              onLoad={loadKnowledgeFile}
+              onClear={clearKnowledge}
+              onOpenDoc={(id) => {
+                selectDoc(id);
+                setView('hud');
+              }}
             />
           )}
-          {view === 'diagnostics' && <Diagnostics suits={suits} now={now} busy={busy} capabilities={capabilities} onCommand={assistant.submitText} />}
+          {view === 'diagnostics' && <Diagnostics knowledge={knowledge} capabilities={capabilities} />}
           {view === 'settings' && (
             <Settings
               settings={settings}
@@ -231,8 +273,7 @@ export default function App() {
               busy={busy}
               onChange={setSettings}
               onTestVoice={() => void assistant.speakText(VOICE_TEST_LINE)}
-              onOpenWorkshop={() => setView('workshop')}
-              onResetDemo={resetDemo}
+              onOpenLibrary={() => setView('library')}
             />
           )}
         </Drawer>

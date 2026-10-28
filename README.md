@@ -1,10 +1,10 @@
-# A.F.A.I.K. — Halloween Edition
+# A.F.A.I.K. — FAI Knowledge Assistant
 
-**AFAIK** (*As Far As I Know*) is a fan-made voice assistant for a Halloween costume party, inspired by Iron Man's JARVIS and branded for Filinvest Alabang Inc. You can talk to it (or type), and it answers in a calm British-style voice using **only the suit data you configure**. The demo suit is the Mark XLIII, and its repair countdown updates live.
+AFAIK is a voice-enabled knowledge assistant for Filinvest Alabang Inc. You can ask questions by voice or by typing. It answers **only from the FAI knowledge file loaded on your device**, in a holographic HUD interface with spoken replies.
 
-- **Client-side only.** React + Vite + TypeScript + Tailwind. There's no backend, database, account or API key.
-- **No paid AI.** A deterministic TypeScript command registry handles commands, using the browser's Web Speech APIs.
-- Not affiliated with Marvel or Disney. The suit data is fictional and the dialogue is original.
+- **No company data in this repository or website.** Each device loads the knowledge export locally, and it's kept only in that browser's `localStorage`.
+- **No AI service or paid API.** Answers come from a deterministic TypeScript engine (page matching, structured facts and keyword search) that quotes the loaded file.
+- **Client-side only.** React + Vite + TypeScript + Tailwind, hosted as a static site (Vercel).
 
 ## Quick start
 
@@ -12,76 +12,82 @@
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # type-check + production build into dist/
-npm run preview    # serve the production build locally
-npm test           # unit tests (command parsing, repair time, validation, persistence)
+npm run preview    # serve the production build
+npm test           # unit tests (parser, answering rules, zip reading, persistence)
+npm run typecheck  # app + tests
 ```
 
-You need Node 20.19 or later.
+Then open **Library** (or use the panel on the right) and load the knowledge export: either the `…_AI_File.md` markdown or the whole export `.zip`, from which the AI File is extracted automatically. The raw `…_Master_File.md` SharePoint export is rejected. Use the AI File.
 
-## Using it
+## Answering rules
 
-| Try saying (or typing) | What happens |
+The engine implements the AFAIK agent rules that can be enforced deterministically:
+
+| Rule | Behaviour |
 |---|---|
-| "AFAIK, status report." | Roster summary plus the selected suit |
-| "How long for the repair for the Mark XLIII?" | Repair ETA from the configured completion time |
-| "What's the status of the Mark 43?" | Repair, power and diagnostics |
-| "Run diagnostics." / "How much power remains?" | Uses the selected suit unless you name one |
-| "Show me the Hulkbuster." | Selects that suit |
-| "Activate party mode." / "Deactivate party mode." | Party personality plus an initialization animation |
-| "Welcome our guests." · "Tell me a joke." · "What can you do?" · "Go to standby." | Party extras |
+| Configured source only | Every answer quotes the loaded file. There's no general knowledge or web access, and the input is never executed. |
+| No answer | Replies exactly: *"This information is not available in the configured knowledge source."* |
+| People | Shown as **Name · Title · Group**. Missing fields read *"Not available in source."* |
+| References | `Source: <page>.aspx — SharePoint site: <site as stated>`. Page URLs are never constructed from file names. Document links that appear only as SharePoint-relative paths are labelled, not expanded. |
+| Conflicts | When same-named pages disagree, both versions are shown under *"The configured sources contain conflicting information"*. |
+| Ambiguity | Asks one clarifying question, e.g. *"Did you mean Botanika Tower 1 or Two Botanika?"* |
+| Projects | "List the projects" uses the **Project Playbook** (FAI projects). |
+| Brands / regions | Brand membership comes from the **Brands** page. North = Prestige, South = Aspire. Regions are never inferred beyond that rule. |
+| `&` / `and` | Treated as equivalent. |
 
-You can say suit designations as "Mark XLIII", "Mark 43", "Mark forty-three" or "MK-43", or use the suit's name. If you ask about a suit that doesn't exist, AFAIK says it has no record of it. If a field is empty, AFAIK says that value is **unavailable** and doesn't guess one.
+Not available in this static build: direct SharePoint/PDF/DOCX retrieval, `event.csv` and the corrections/roster data. Answers come only from the loaded markdown export.
 
-**Workshop** (left panel → Systems) lets you edit each suit's status, progress, completion time, power, diagnostics and notes. You can set the completion time as a date/time or as "time remaining from now". Changes are saved in `localStorage`. **Reset to demo data** restores the defaults, including a fresh 2 h 40 m countdown for the Mark XLIII.
+### Example questions
 
-**Settings** lets you choose the voice (any voice on the device), rate and pitch, and test the voice. You can also turn speech and sound effects on or off and pick an activation mode.
+- "How much is a 1-bedroom at 1001 Parkway?" → then "What are the payment terms?" (a follow-up uses the page on screen)
+- "How do I request a cash advance?" · "How long is the approval?" · "What forms do I need?"
+- "Where is Aeon Center?" · "Shuttle schedule for Aeon Center"
+- "Who is on the 1001 Parkway team?" · "Who is <full name>?"
+- "List the FAI projects" · "List the Prestige projects" · "What are the north projects?" · "What brand is Celestia?"
 
-### Activation modes
+## Voice
 
-| Mode | Behaviour | Reliability |
-|---|---|---|
-| Push to talk (default) | Press the mic and say one command | Best |
-| Conversation | The mic re-opens after each reply. It stops after silence or "Go to standby" | Good |
-| Wake word (experimental) | Listens continuously and responds only to phrases containing "AFAIK", spelled out letter by letter | Chrome/Edge desktop. Occasional misses are expected |
+| Mode | Behaviour |
+|---|---|
+| Push to talk (default) | Press the mic and ask one question. Most reliable. |
+| Conversation | The mic re-opens after each reply. It stops on silence or "go to standby". |
+| Wake word (experimental) | Listens continuously for "AFAIK", spelled letter by letter (Chrome/Edge desktop). Expect occasional misses. |
 
-The microphone is only requested after you press the mic button. Recognition always stops while AFAIK speaks, so it never hears itself.
+- Speech recognition works in Chrome, Edge and Safari. It isn't available in Firefox, where the text box still works. Chrome and Edge need an internet connection for recognition.
+- The microphone requires HTTPS (Vercel provides it) or `localhost`.
+- Voices depend on the device. A British English voice is preferred, and you can choose any voice in Settings.
+- Spoken answers are shortened. The full answer, with its source reference, is always on screen.
+- **Diagnostics** checks the browser's voice support and the loaded knowledge file (Project Playbook and Brands page found).
 
-## Browser limitations
+## Data handling
 
-- **Wake word:** say "AFAIK" as letters ("A-F-A-I-K"). Recognisers handle spelled-out letters less reliably than a single word, so push to talk is the safest mode for the party.
-
-- **Speech recognition** works in Chrome, Edge and Safari. It is **not supported in Firefox**, where the text input still works. Chrome and Edge send audio to their cloud recogniser, so they **need an internet connection**.
-- The microphone needs **HTTPS** or `localhost`. Vercel provides HTTPS.
-- **Voices vary by device.** The app prefers a British male voice ("Microsoft Ryan" in Edge, "Google UK English Male" in Chrome, "Daniel" on Apple devices) and falls back to any English voice. It's a JARVIS-*style* delivery, not the film voice.
-- iOS Safari only allows speech after a tap. The first mic or send press unlocks it.
-- **Diagnostics → Browser systems check** shows what works on the current device. Run it on the exact laptop and browser you'll use at the party.
+- The knowledge file is read in the browser with the File API (and `DecompressionStream` for zips). It is never uploaded.
+- It is stored under `afaik.knowledge.v1` in that browser's `localStorage` (about 300 KB). **Library → Remove from this device** deletes it.
+- `.gitignore` blocks knowledge exports and zips from being committed. Tests use a fictional fixture (`src/test/fixture.ts`).
+- Anyone using the hosted site must have the file themselves. The site contains no company content.
 
 ## Deploying to Vercel
 
-1. Push this repository to GitHub. It's already set up as a standard Vite project.
-2. At <https://vercel.com/new>, choose **Import Git Repository** and select this repo. You may need to grant the Vercel GitHub app access to it first.
-3. Vercel detects **Vite** automatically. Keep the defaults:
-   - Build command: `npm run build`
-   - Output directory: `dist`
-   - Install command: `npm install`
-   - Environment variables: none
-4. Click **Deploy**. Every later push to the production branch redeploys.
-
-The app is a single page with no client-side routes, so no rewrite rules are needed. Alternatively, with the Vercel CLI: `npx vercel` (preview) and `npx vercel --prod`.
+1. Import the GitHub repository at <https://vercel.com/new>. It's detected as **Vite**.
+2. Keep the defaults: build `npm run build`, output `dist`, no environment variables.
+3. Deploy. Later pushes to the production branch redeploy automatically.
 
 ## Project structure
 
 ```
 src/
-  components/   Header, AfaikCore (SVG/CSS core), CommandPanel, SuitStatusPanel,
-                TelemetryPanel, VoiceControl, CommandHistory, Drawer
-  pages/        Workshop, Diagnostics, Settings
-  data/         demoData.ts (fictional sample suits), persistence.ts (localStorage)
-  services/     commandInterpreter.ts, responseEngine.ts, speechRecognition.ts,
-                speechSynthesis.ts, soundEffects.ts
-  hooks/        useVoiceAssistant (state machine), useVoices, useNow
-  types/        jarvis.ts
-  utils/        time.ts, validation.ts
+  components/  Header, AfaikCore (SVG/CSS core), KnowledgePanel, DocumentPanel,
+               KnowledgeLoader, VoiceControl, CommandHistory, Drawer
+  pages/       Library, Diagnostics, Settings
+  services/    knowledgeParser    — export markdown → structured pages
+               knowledgeSearch    — page matching + BM25 keyword search
+               knowledgeStructure — Brands, Project Playbook, people
+               knowledgeFile      — .md / .zip reading in the browser
+               commandInterpreter — question → intent, page, field
+               responseEngine     — answering rules, references, speech text
+               speechRecognition, speechSynthesis, soundEffects
+  hooks/       useVoiceAssistant (listen → process → speak), useVoices, useNow
+  data/        persistence (localStorage)
+  utils/       text (speech formatting), validation (settings)
+  test/        fictional fixture
 ```
-
-The flow is: recognised text → `commandInterpreter` (intent, suit and errors) → `responseEngine` (display text, speakable text and UI actions) → `useVoiceAssistant` (speaks the reply and applies the actions). Randomness only changes phrasing and clearly labelled jokes. It never changes facts.

@@ -1,4 +1,4 @@
-import { Database, Play, RotateCcw } from 'lucide-react';
+import { Library, Play, RotateCcw } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { VoicesState } from '../hooks/useVoices';
 import { ACTIVATION_MODES, type ActivationMode, type Settings as SettingsModel } from '../types/afaik';
@@ -11,8 +11,7 @@ interface SettingsProps {
   busy: boolean;
   onChange: (settings: SettingsModel) => void;
   onTestVoice: () => void;
-  onOpenWorkshop: () => void;
-  onResetDemo: () => void;
+  onOpenLibrary: () => void;
 }
 
 const MODE_INFO: Record<ActivationMode, { title: string; description: string }> = {
@@ -49,7 +48,7 @@ function Toggle({ id, label, checked, onChange }: { id: string; label: string; c
   );
 }
 
-export function Settings({ settings, voices, recognitionSupported, busy, onChange, onTestVoice, onOpenWorkshop, onResetDemo }: SettingsProps) {
+export function Settings({ settings, voices, recognitionSupported, busy, onChange, onTestVoice, onOpenLibrary }: SettingsProps) {
   const set = <K extends keyof SettingsModel>(key: K, value: SettingsModel[K]) => onChange({ ...settings, [key]: value });
 
   return (
@@ -80,7 +79,7 @@ export function Settings({ settings, voices, recognitionSupported, busy, onChang
               <p className="text-xs text-haze">
                 {voices.loading
                   ? 'Loading voices…'
-                  : `${voices.voices.length} voices found. Voices depend on your browser and operating system — British male voices include “Daniel” (Apple), “Google UK English Male” (Chrome) and “Microsoft Ryan” (Edge). This is a JARVIS-style delivery, not the film voice.`}
+                  : `${voices.voices.length} voices found. Voices depend on your browser and operating system — British male voices include “Daniel” (Apple), “Google UK English Male” (Chrome) and “Microsoft Ryan” (Edge). `}
               </p>
               {voices.usingFallback && <p className="text-sm text-warn">Your saved voice isn’t available on this device; using {voices.activeVoice?.name ?? 'the default'}.</p>}
             </div>
@@ -137,26 +136,15 @@ export function Settings({ settings, voices, recognitionSupported, busy, onChang
         </fieldset>
       </Group>
 
-      <Group title="Suit data">
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className="hud-button" onClick={onOpenWorkshop}>
-            <Database size={16} aria-hidden /> Manage suits in Workshop
-          </button>
-          <button
-            type="button"
-            className="hud-button"
-            onClick={() => {
-              if (window.confirm('Reset all suits to the demo data? Your edits will be lost.')) onResetDemo();
-            }}
-          >
-            <RotateCcw size={16} aria-hidden /> Reset demo configuration
-          </button>
-        </div>
+      <Group title="Knowledge source">
+        <p className="text-sm text-haze">The knowledge file is loaded per device and kept only in this browser.</p>
+        <button type="button" className="hud-button" onClick={onOpenLibrary}>
+          <Library size={16} aria-hidden /> Open Library
+        </button>
       </Group>
 
       <p className="text-xs text-haze">
-        Settings are stored only in this browser’s local storage. No accounts, API keys or servers are involved. Fan-made project; not affiliated with
-        Marvel or Disney.
+        Settings and the knowledge file are stored only in this browser’s local storage. No accounts, API keys, servers or AI services are involved.
       </p>
     </div>
   );

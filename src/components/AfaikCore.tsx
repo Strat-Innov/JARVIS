@@ -6,7 +6,6 @@ interface AfaikCoreProps {
   /** Increments on speech word boundaries to flash the reactor in time with speech. */
   pulse: number;
   booting: boolean;
-  partyMode: boolean;
 }
 
 const CX = 200;
@@ -57,13 +56,12 @@ const STATE_LABELS: Record<AssistantState, string> = {
 };
 
 /** The animated arc-reactor-style core. All animation is CSS; state is exposed via data attributes. */
-function AfaikCoreImpl({ state, pulse, booting, partyMode }: AfaikCoreProps) {
+function AfaikCoreImpl({ state, pulse, booting }: AfaikCoreProps) {
   return (
     <div
       className="core relative aspect-square w-full"
       data-state={state}
       data-booting={booting}
-      data-party={partyMode}
       role="img"
       aria-label={`AFAIK core — ${STATE_LABELS[state]}`}
     >

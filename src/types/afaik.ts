@@ -1,32 +1,65 @@
 /** Shared domain types for the AFAIK application. */
 
-export const REPAIR_STATUSES = ['operational', 'repairing', 'damaged', 'offline'] as const;
-export type RepairStatus = (typeof REPAIR_STATUSES)[number];
+export const KNOWLEDGE_CATEGORIES = ['project', 'building', 'department', 'procedure', 'news', 'general'] as const;
+export type KnowledgeCategory = (typeof KNOWLEDGE_CATEGORIES)[number];
 
-export const DIAGNOSTIC_STATUSES = ['nominal', 'warning', 'critical', 'unknown'] as const;
-export type DiagnosticStatus = (typeof DIAGNOSTIC_STATUSES)[number];
+export interface KnowledgeLink {
+  label: string;
+  /** Absolute https URL, or null for internal SharePoint paths that only work inside the company network. */
+  url: string | null;
+}
 
-/**
- * A suit record. All telemetry is simulated, user-configured data.
- * Nullable fields mean "not recorded" — AFAIK must say so rather than guess.
- */
-export interface Suit {
+export interface KnowledgeSection {
+  heading: string;
+  /** Plain-text lines (markdown list markers removed). */
+  lines: string[];
+  links: KnowledgeLink[];
+}
+
+/** One page of the knowledge base, e.g. a project, a building or a procedure. */
+export interface KnowledgeDoc {
   id: string;
-  /** Display name, e.g. "Mark XLIII" or "Hulkbuster". */
+  title: string;
+  category: KnowledgeCategory;
+  /** Lowercased names this page can be referred to by (title, file name, abbreviations). */
+  aliases: string[];
+  /** First descriptive paragraph, if any. */
+  summary: string;
+  /** Key–value facts found on the page, e.g. { Status: 'RFO', Location: 'Parkway Avenue' }. */
+  facts: Record<string, string>;
+  sections: KnowledgeSection[];
+  /** SharePoint page file name, e.g. "1001-Parkway.aspx". */
+  sourceFile: string;
+  /** SharePoint site exactly as stated in the source (never constructed). */
+  sharepointSite: string;
+  /** Links to other SharePoint pages, grouped under the paragraph they follow (used by Brands and Project Playbook). */
+  refGroups: PageRefGroup[];
+}
+
+export interface PageRefGroup {
+  /** The text paragraph preceding the references ('' if none). */
+  context: string;
+  /** Referenced page file names, e.g. "CELESTIA.aspx". */
+  refs: string[];
+}
+
+export const BRANDS = ['Filigree', 'Prestige', 'Aspire'] as const;
+export type Brand = (typeof BRANDS)[number];
+
+/** A person listed on a page, e.g. in "Meet The Team". */
+export interface PersonEntry {
   name: string;
-  /** Formal designation, e.g. "Mark XLIII". Used for voice matching. */
-  designation: string;
-  repairStatus: RepairStatus;
-  /** 0–100, or null when unknown. */
-  repairProgress: number | null;
-  /** ISO 8601 timestamp of the estimated repair completion, or null when unknown. */
-  repairCompletesAt: string | null;
-  /** Simulated power level 0–100, or null when unknown. */
-  powerLevel: number | null;
-  diagnosticStatus: DiagnosticStatus;
-  notes: string;
-  /** True for invented sample data shipped with the app. */
-  fictional: boolean;
+  title: string | null;
+  group: string | null;
+  email: string | null;
+  docId: string;
+}
+
+export interface KnowledgeBase {
+  docs: KnowledgeDoc[];
+  /** File name the knowledge was loaded from. */
+  sourceName: string;
+  loadedAt: number;
 }
 
 export type AssistantState = 'standby' | 'listening' | 'processing' | 'speaking' | 'error';
@@ -45,32 +78,50 @@ export interface Settings {
 }
 
 export interface SessionState {
-  selectedSuitId: string | null;
-  partyMode: boolean;
+  selectedDocId: string | null;
+  selectedCategory: KnowledgeCategory;
 }
+
+/** What part of a page a question is about. */
+export const DOC_FIELDS = [
+  'pricing',
+  'payment',
+  'location',
+  'status',
+  'units',
+  'turnover',
+  'amenities',
+  'parking',
+  'transport',
+  'process',
+  'requirements',
+  'approval_time',
+  'documents',
+  'team',
+  'links',
+  'awards',
+  'overview',
+] as const;
+export type DocField = (typeof DOC_FIELDS)[number];
 
 export type Intent =
   | 'greeting'
-  | 'status_report'
-  | 'suit_status'
-  | 'repair_estimate'
-  | 'diagnostics'
-  | 'power_level'
-  | 'show_suit'
-  | 'list_suits'
-  | 'party_on'
-  | 'party_off'
   | 'help'
   | 'standby'
   | 'time'
-  | 'welcome_guests'
-  | 'joke'
   | 'thanks'
   | 'identity'
-  | 'easter_egg'
+  | 'list_category'
+  | 'list_playbook'
+  | 'brand'
+  | 'person'
+  | 'clarify'
+  | 'show_doc'
+  | 'doc_field'
+  | 'search'
   | 'unknown';
 
-export type InterpretationError = 'empty_input' | 'suit_not_found';
+export type InterpretationError = 'empty_input' | 'knowledge_missing' | 'doc_not_found';
 
 /** Output of the deterministic command interpreter. */
 export interface Interpretation {
@@ -79,36 +130,39 @@ export interface Interpretation {
   rawText: string;
   normalizedText: string;
   params: {
-    /** Resolved suit id (explicitly mentioned, or the selected suit as fallback). */
-    suitId?: string;
-    /** True when the suit was explicitly named in the command. */
-    suitExplicit?: boolean;
-    /** The suit reference as spoken, e.g. "mark 50", when it could not be resolved. */
-    suitQuery?: string;
-    /** Key for easter-egg responses. */
-    easterEgg?: string;
+    docId?: string;
+    /** True when the page was named in the question (rather than the selected page). */
+    docExplicit?: boolean;
+    field?: DocField;
+    category?: KnowledgeCategory;
+    /** Search terms for free-text questions. */
+    query?: string;
+    /** Other pages that match equally well (conflict check) or candidates for a clarifying question. */
+    docIds?: string[];
+    brand?: Brand;
+    /** Set when the brand was asked as a region (North = Prestige, South = Aspire). */
+    region?: 'north' | 'south';
+    /** Person-name words for people lookups. */
+    personQuery?: string;
   };
   error?: InterpretationError;
 }
 
-export type View = 'hud' | 'workshop' | 'diagnostics' | 'settings';
+export type View = 'hud' | 'library' | 'diagnostics' | 'settings';
 
 export type AssistantAction =
-  | { type: 'select-suit'; suitId: string }
-  | { type: 'set-party-mode'; enabled: boolean }
-  | { type: 'standby' }
-  | { type: 'diagnostics-run'; suitId: string };
+  | { type: 'select-doc'; docId: string }
+  | { type: 'select-category'; category: KnowledgeCategory }
+  | { type: 'standby' };
 
 export interface AssistantResponse {
   /** Text shown on screen. */
   display: string;
-  /** Text sent to speech synthesis (designations expanded for pronunciation). */
+  /** Text sent to speech synthesis (shortened and expanded for pronunciation). */
   speech: string;
   actions: AssistantAction[];
   /** Simulated processing time before replying, in ms. */
   processingMs: number;
-  /** Plays the party-mode initialization animation. */
-  bootSequence?: boolean;
 }
 
 /** A complete command turn: interpretation plus generated response. */

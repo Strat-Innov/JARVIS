@@ -1,13 +1,14 @@
-import { PartyPopper, Settings as SettingsIcon } from 'lucide-react';
+import { Database, Settings as SettingsIcon } from 'lucide-react';
 
 interface HeaderProps {
   now: number;
   availability: { label: string; tone: 'ok' | 'warn' };
-  partyMode: boolean;
+  /** e.g. "138 pages", or null when no knowledge file is loaded. */
+  knowledgeLabel: string | null;
   onOpenSettings: () => void;
 }
 
-export function Header({ now, availability, partyMode, onOpenSettings }: HeaderProps) {
+export function Header({ now, availability, knowledgeLabel, onOpenSettings }: HeaderProps) {
   const time = new Date(now);
   return (
     <header className="hud-panel flex items-center gap-3 px-3 py-2 sm:gap-6 sm:px-5">
@@ -22,11 +23,13 @@ export function Header({ now, availability, partyMode, onOpenSettings }: HeaderP
       </div>
 
       <div className="ml-auto flex items-center gap-3 sm:gap-6">
-        {partyMode && (
-          <span className="hidden items-center gap-1.5 border border-fuchsia-400/40 bg-fuchsia-400/10 px-2 py-1 font-display text-[0.6rem] tracking-[0.2em] text-fuchsia-200 sm:flex">
-            <PartyPopper size={14} aria-hidden /> PARTY PROTOCOL
-          </span>
-        )}
+        <span
+          className={`hidden items-center gap-1.5 border px-2 py-1 font-display text-[0.6rem] tracking-[0.2em] md:flex ${
+            knowledgeLabel ? 'border-arc/30 bg-arc/10 text-arc-bright' : 'border-warn/40 bg-warn/10 text-warn'
+          }`}
+        >
+          <Database size={14} aria-hidden /> {knowledgeLabel ? `KNOWLEDGE · ${knowledgeLabel.toUpperCase()}` : 'NO KNOWLEDGE LOADED'}
+        </span>
         <div className="flex items-center gap-2" role="status" aria-label={`System ${availability.label}`}>
           <span
             className="status-dot live"

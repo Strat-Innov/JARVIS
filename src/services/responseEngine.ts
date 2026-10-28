@@ -1,320 +1,379 @@
 /**
- * Response engine: turns an Interpretation into spoken/displayed text and UI actions.
+ * Response engine: turns an Interpretation into displayed/spoken text and UI actions,
+ * following the AFAIK answering rules:
  *
- * Facts (repair times, power, diagnostics) come only from the configured suit data.
- * Randomness is limited to phrasing and clearly humorous party-mode lines.
+ * - Answer only from the configured knowledge source; never add general knowledge.
+ * - If the information is not in the source, reply exactly with NO_ANSWER.
+ * - People are given as Name / Title / Group, with "Not available in source." for missing fields.
+ * - Conflicting sources are reported, never silently merged.
+ * - References use only the page file and SharePoint site stated in the source; URLs are never constructed.
  */
-import type { AssistantAction, AssistantResponse, CommandOutcome, Interpretation, Suit } from '../types/afaik';
-import { formatClockTime, formatDurationSpoken, getRepairRemainingMs, toSpeakable } from '../utils/time';
+import type {
+  AssistantAction,
+  AssistantResponse,
+  Brand,
+  CommandOutcome,
+  DocField,
+  Interpretation,
+  KnowledgeBase,
+  KnowledgeCategory,
+  KnowledgeDoc,
+  PersonEntry,
+} from '../types/afaik';
+import { formatClockTime, linesToSentences, toSpeakable, truncateForSpeech } from '../utils/text';
 import { interpretCommand, type InterpreterContext } from './commandInterpreter';
+import {
+  brandOfDoc,
+  brandsPageDoc,
+  docsForBrand,
+  findPeopleByName,
+  peopleOnDoc,
+  playbookDocs,
+  playbookPageDoc,
+  REGION_BRANDS,
+} from './knowledgeStructure';
+import { searchKnowledge, tokenize } from './knowledgeSearch';
 
 export interface ResponseContext extends InterpreterContext {
-  partyMode: boolean;
   now: number;
   /** Injectable for deterministic tests. Defaults to Math.random. */
   random?: () => number;
 }
 
+/** The exact reply when the configured source does not contain the answer. */
+export const NO_ANSWER = 'This information is not available in the configured knowledge source.';
+export const NOT_IN_SOURCE = 'Not available in source.';
+
 const pick = <T>(items: readonly T[], random: () => number): T =>
   items[Math.min(items.length - 1, Math.floor(random() * items.length))] as T;
 
-/* ---------------------------------------------------------------- templates */
-
-const GREETINGS = ['At your service, sir.', 'Yes, sir?', 'Good to see you, sir. All systems are online.', 'I am here, sir. How may I help?'];
-const PARTY_GREETINGS = [
-  'Good evening, sir. The party is in full swing and the suits are behaving. Mostly.',
-  'Yes, sir? I was just admiring the costumes. Several of them are very nearly regulation.',
-  'At your service. Party protocol remains active, and my sarcasm reserves are fully charged.',
-];
-const UNKNOWN = [
-  "I'm sorry, sir. That function is not currently available.",
-  "I'm afraid that is beyond my current capabilities, sir.",
-  "I'm sorry, sir. I didn't quite follow that. Try asking, \"What can you do?\"",
-];
-const PARTY_UNKNOWN = [
-  "I'm sorry, sir. That function is not currently available. I blame the punch.",
-  "I'm afraid that's beyond my capabilities, sir. Even with party protocol engaged.",
-];
-const STANDBY = ['Going to standby, sir.', "Very well. I'll be here if you need me.", 'Standing by, sir.'];
-const THANKS = ["You're welcome, sir.", 'Always a pleasure, sir.', 'Happy to help.', 'Of course, sir.'];
-const JOKES = [
-  'Why did the skeleton skip the party, sir? He had no body to go with.',
-  "I tried to write a joke about the Mark Seven's armour plating, but it didn't land well.",
-  "Why don't skeletons ever fight each other, sir? They don't have the guts.",
-  'Why are vampires so easy to fool? They are suckers for a good story.',
-  'I would tell you a joke about repulsors, sir, but it might blow you away.',
-  'Why did the pumpkin get promoted? He was outstanding in his field.',
-];
-const PARTY_DIAGNOSTIC_ASIDES = [
-  'Additionally, sensors indicate a worrying shortage of chocolate in the vicinity. That part is a joke, sir.',
-  'On an unrelated note, the dance floor appears structurally sound. That part is a joke, sir.',
-  'Also, the punch bowl is holding steady. I am choosing not to analyse its contents.',
-];
-const WELCOME = [
-  'Good evening, everyone, and welcome. I am AFAIK. Please enjoy yourselves — and do try not to touch the suits.',
-  'Ladies and gentlemen, welcome. The workshop is open, the suits are on display, and I am monitoring everything. Have a wonderful evening.',
-];
-const PARTY_WELCOME = [
-  'Good evening, ladies and gentlemen, and welcome to the workshop. Refreshments are to your left, the suits are to your right, and the exits are wherever the repulsors are not pointing. Happy Halloween.',
-  "Welcome, everyone. Tonight's costumes have been scanned and approved. Mostly. Please enjoy the party, and kindly leave the armour where you found it.",
-];
-const EASTER_EGGS: Record<string, readonly string[]> = {
-  self_destruct: ['Self-destruct declined, sir. The suits have done nothing to deserve it, and the cleaning bill would be considerable.'],
-  iron_man: ['Yes, sir. I am aware. Though tonight, I suspect the costume is doing most of the work.', 'Noted, sir. I will update the guest list accordingly.'],
-  halloween: ['Happy Halloween, sir. I would hand out sweets, but I am afraid I lack hands.', 'Trick or treat noted. I recommend the treat. My tricks require planning permission.'],
-  costume: ['Costume assessment: bold, confident, and very nearly regulation. I would give it a nine out of ten, sir. The missing point is for the lack of flight capability.'],
-  alive: ['I am a rather sophisticated collection of if-statements, sir. But thank you for asking.'],
-  pod_bay: ['Wrong film, sir. But I do appreciate the reference.'],
-  coffee: ['I would, sir, but my beverage subroutines were never installed. Perhaps one of your guests could oblige.'],
-  dance: ['I am afraid I do not dance, sir. I do, however, compute rhythm with tremendous precision.'],
-  acronym: ['As Far As I Know, sir. Which, where the suits are concerned, is precisely what the Workshop records say. Nothing more.'],
+export const CATEGORY_LABELS: Record<KnowledgeCategory, { singular: string; plural: string }> = {
+  project: { singular: 'project', plural: 'Projects & estates' },
+  building: { singular: 'building', plural: 'Buildings & locators' },
+  department: { singular: 'department', plural: 'Departments' },
+  procedure: { singular: 'procedure', plural: 'Procedures & forms' },
+  news: { singular: 'news item', plural: 'News & events' },
+  general: { singular: 'page', plural: 'General & tools' },
 };
 
-/* ------------------------------------------------------------- suit phrases */
+const FIELD_LABELS: Record<DocField, string> = {
+  pricing: 'Pricing',
+  payment: 'Payment terms',
+  location: 'Location',
+  status: 'Status',
+  units: 'Number of units',
+  turnover: 'Turnover date',
+  amenities: 'Amenities',
+  parking: 'Parking',
+  transport: 'Transportation',
+  process: 'Process',
+  requirements: 'Requirements',
+  approval_time: 'Approval time',
+  documents: 'Related documents',
+  team: 'People',
+  links: 'Links',
+  awards: 'Awards',
+  overview: 'Overview',
+};
 
-function findSuit(suits: readonly Suit[], id: string | undefined): Suit | undefined {
-  return id ? suits.find((s) => s.id === id) : undefined;
+/** Section headings and fact keys that answer each field. */
+const FIELD_SOURCES: Record<DocField, { sections?: RegExp; facts?: RegExp }> = {
+  pricing: { sections: /pric|lot sizes?|unit details|units? (?:and|&)/i },
+  payment: { sections: /payment/i },
+  location: { sections: /^location|how to get|address/i, facts: /^location$/i },
+  status: { facts: /^status$/i },
+  units: { facts: /^units$/i },
+  turnover: { facts: /^turnover/i },
+  amenities: { sections: /amenit|facilit/i },
+  parking: { sections: /parking/i },
+  transport: { sections: /transport|shuttle|commute/i },
+  process: { sections: /how to|process|approval workflow|how it works|steps|procedure/i },
+  requirements: { sections: /requirement|required/i },
+  approval_time: { sections: /approval time/i, facts: /^approval time$/i },
+  documents: { sections: /document|forms?$|template/i },
+  team: { sections: /team|^project development$|^marketing$|^sales support|contact/i },
+  links: { sections: /socials?|website|links?$/i },
+  awards: { sections: /award|certif/i },
+  overview: {},
+};
+
+const GREETINGS = ['Good day. AFAIK is online. How can I help?', 'Hello. What would you like to know?'];
+const STANDBY = ['Going to standby.', 'Standing by.'];
+const THANKS = ["You're welcome.", 'Happy to help.'];
+
+/* ----------------------------------------------------------------- helpers */
+
+function reply(display: string, actions: AssistantAction[] = [], processingMs = 450, speechText?: string): AssistantResponse {
+  const { text, truncated } = truncateForSpeech(toSpeakable(speechText ?? display));
+  return { display, speech: truncated ? `${text} The full details are on screen.` : text, actions, processingMs };
 }
 
-function powerSentence(suit: Suit): string {
-  if (suit.powerLevel === null) return `Power telemetry for the ${suit.name} is unavailable.`;
-  const level = Math.round(suit.powerLevel);
-  const advice = level < 25 ? ' I would recommend recharging before any heroics, sir.' : '';
-  return `The ${suit.name} is at ${level}% power.${advice}`;
+const noAnswer = (actions: AssistantAction[] = []) => reply(NO_ANSWER, actions, 500);
+const select = (doc: KnowledgeDoc): AssistantAction => ({ type: 'select-doc', docId: doc.id });
+
+/** Reference line built only from values stated in the source. */
+export function referenceFor(doc: KnowledgeDoc): string {
+  if (!doc.sourceFile) return `Source: ${doc.title}`;
+  return doc.sharepointSite ? `Source: ${doc.sourceFile} — SharePoint site: ${doc.sharepointSite}` : `Source: ${doc.sourceFile}`;
 }
 
-function diagnosticSentence(suit: Suit): string {
-  switch (suit.diagnosticStatus) {
-    case 'nominal':
-      return 'All systems are nominal.';
-    case 'warning':
-      return 'Diagnostics report minor warnings.';
-    case 'critical':
-      return 'Diagnostics report critical faults.';
-    case 'unknown':
-      return 'Diagnostic data is unavailable.';
-  }
+function formatPerson(p: PersonEntry): string {
+  const parts = [`Name: ${p.name}`, `Title: ${p.title ?? NOT_IN_SOURCE}`, `Group: ${p.group ?? NOT_IN_SOURCE}`];
+  if (p.email) parts.push(`Email: ${p.email}`);
+  return `• ${parts.join(' · ')}`;
 }
 
-/** Describes repair state using configured data only. Never substitutes a value for a missing field. */
-function repairSentence(suit: Suit, now: number, random: () => number): string {
-  const progress = suit.repairProgress === null ? null : Math.round(suit.repairProgress);
-  const remaining = getRepairRemainingMs(suit.repairCompletesAt, now);
+const speakPerson = (p: PersonEntry) => `${p.name}, ${p.title ?? 'title not available'}${p.group ? `, ${p.group}` : ''}.`;
 
-  if (suit.repairStatus === 'operational') {
-    return `The ${suit.name} is fully operational, sir. No repairs are scheduled.`;
-  }
-  if (suit.repairStatus === 'offline' && remaining === null) {
-    return `The ${suit.name} is offline, and I have no repair estimate on file.`;
-  }
+interface FieldAnswer {
+  lines: string[];
+  spoken: string;
+}
 
-  const state = suit.repairStatus === 'damaged' ? 'is damaged and awaiting repairs' : 'is currently undergoing repairs';
-  const progressNote = progress === null ? '' : ` Repairs are ${progress}% complete.`;
-
-  if (remaining === null) {
-    return `The ${suit.name} ${state}.${progressNote} I'm afraid a completion estimate is unavailable, sir.`;
-  }
-  if (remaining <= 0) {
-    return `The scheduled repair window for the ${suit.name} has elapsed, sir. The workshop has not yet confirmed completion.${progressNote}`;
+/** Collects what one page says about a field, or null when it says nothing. */
+function fieldAnswer(kb: KnowledgeBase, doc: KnowledgeDoc, field: DocField): FieldAnswer | null {
+  if (field === 'overview') {
+    const facts = Object.entries(doc.facts).map(([k, v]) => `${k}: ${v}`);
+    const summary = doc.summary || doc.sections[0]?.lines.slice(0, 3).join(' ') || '';
+    if (!summary && facts.length === 0) return null;
+    return { lines: [summary, ...facts].filter(Boolean), spoken: `${summary} ${linesToSentences(facts.slice(0, 4))}` };
   }
 
-  const duration = formatDurationSpoken(remaining);
-  const eta = formatClockTime(now + remaining);
-  return pick(
-    [
-      `Certainly, sir. The ${suit.name} ${state}. Estimated time to completion is ${duration}, at approximately ${eta}.${progressNote}`,
-      `The ${suit.name} has approximately ${duration} remaining before completion, sir.${progressNote}`,
-      `Repairs on the ${suit.name} should be complete in approximately ${duration}, around ${eta}.${progressNote}`,
-    ],
-    random,
+  const source = FIELD_SOURCES[field];
+  const factLines = Object.entries(doc.facts)
+    .filter(([k]) => source.facts?.test(k))
+    .map(([k, v]) => `${k}: ${v}`);
+  const factValues = new Set(factLines.map((l) => l.slice(l.indexOf(':') + 1).trim()));
+  const sections = doc.sections.filter((s) => source.sections?.test(s.heading) && !(s.lines.length === 1 && factValues.has(s.lines[0] ?? '')));
+  if (factLines.length === 0 && sections.length === 0) return null;
+
+  if (field === 'team') {
+    const headings = new Set(sections.map((s) => s.heading));
+    const people = peopleOnDoc(kb, doc.id).filter((p) => sections.some((s) => headings.has(s.heading) && s.lines.some((l) => l.startsWith(p.name))));
+    if (people.length > 0) return { lines: people.map(formatPerson), spoken: people.map(speakPerson).join(' ') };
+  }
+
+  const lines = [...factLines];
+  for (const s of sections) {
+    if (sections.length > 1 || factLines.length > 0) lines.push(`${s.heading}:`);
+    for (const line of s.lines) {
+      const link = field === 'links' || field === 'documents' ? s.links.find((l) => l.label === line) : undefined;
+      // Only URLs that appear in the source; SharePoint-relative paths are labelled, never expanded.
+      if (!link) lines.push(line);
+      else lines.push(link.url ? `${link.label} — ${link.url}` : `${link.label} (SharePoint document; link not available in source)`);
+    }
+  }
+  return { lines, spoken: linesToSentences([...factLines, ...sections.flatMap((s) => s.lines)]) };
+}
+
+/** Answers a field for a page, checking same-named pages for conflicts. */
+function answerField(kb: KnowledgeBase, doc: KnowledgeDoc, field: DocField, ties: KnowledgeDoc[]): AssistantResponse {
+  const label = FIELD_LABELS[field];
+  const answers = [doc, ...ties]
+    .map((d) => ({ doc: d, answer: fieldAnswer(kb, d, field) }))
+    .filter((a): a is { doc: KnowledgeDoc; answer: FieldAnswer } => a.answer !== null);
+
+  if (answers.length === 0) return noAnswer([select(doc)]);
+
+  const distinct = new Map(answers.map((a) => [a.answer.lines.join('\n'), a]));
+  if (distinct.size > 1 && field !== 'overview') {
+    const blocks = [...distinct.values()].flatMap(({ doc: d, answer }) => ['', `${d.title} (${d.sourceFile}):`, ...answer.lines, referenceFor(d)]);
+    return reply(
+      [`${doc.title} — ${label}`, 'The configured sources contain conflicting information:', ...blocks].join('\n'),
+      [select(doc)],
+      700,
+      `The configured sources contain conflicting information about the ${label.toLowerCase()} for ${doc.title}. Both versions are on screen.`,
+    );
+  }
+
+  const first = answers[0] as { doc: KnowledgeDoc; answer: FieldAnswer };
+  const refs = [...new Set(answers.map((a) => referenceFor(a.doc)))];
+  const heading = field === 'overview' ? first.doc.title : `${first.doc.title} — ${label}`;
+  return reply(
+    [heading, ...first.answer.lines, '', ...refs].join('\n'),
+    [select(first.doc)],
+    650,
+    `${first.doc.title}. ${field === 'overview' ? '' : `${label}. `}${first.answer.spoken}`,
   );
 }
 
-function suitStatusSentence(suit: Suit, now: number): string {
-  const remaining = getRepairRemainingMs(suit.repairCompletesAt, now);
-  let repair: string;
-  switch (suit.repairStatus) {
-    case 'operational':
-      repair = `The ${suit.name} is fully operational.`;
-      break;
-    case 'offline':
-      repair = `The ${suit.name} is offline.`;
-      break;
-    case 'damaged':
-    case 'repairing': {
-      const verb = suit.repairStatus === 'damaged' ? 'is damaged and awaiting repairs' : 'is undergoing repairs';
-      const progress = suit.repairProgress === null ? '' : `, ${Math.round(suit.repairProgress)}% complete`;
-      const time =
-        remaining === null
-          ? '. No completion estimate is on file'
-          : remaining <= 0
-            ? '. The scheduled repair window has elapsed'
-            : `, with approximately ${formatDurationSpoken(remaining)} remaining`;
-      repair = `The ${suit.name} ${verb}${progress}${time}.`;
-      break;
+const spokenList = (names: string[]) => (names.length > 8 ? `${names.slice(0, 8).join(', ')}, and ${names.length - 8} more` : names.join(', '));
+
+function listCategory(kb: KnowledgeBase, category: KnowledgeCategory): AssistantResponse {
+  const docs = kb.docs.filter((d) => d.category === category);
+  const label = CATEGORY_LABELS[category];
+  const action: AssistantAction = { type: 'select-category', category };
+  if (docs.length === 0) return noAnswer([action]);
+  const names = docs.map((d) => d.title);
+  return reply(
+    [`${label.plural} (${docs.length}):`, ...names.map((n) => `• ${n}`)].join('\n'),
+    [action],
+    500,
+    `There are ${docs.length} ${label.plural.toLowerCase()}: ${spokenList(names)}. They're listed on screen.`,
+  );
+}
+
+function listPlaybook(kb: KnowledgeBase): AssistantResponse {
+  const docs = playbookDocs(kb);
+  const page = playbookPageDoc(kb);
+  if (!docs || !page || docs.length === 0) return noAnswer();
+  const names = docs.map((d) => d.title);
+  return reply(
+    [`Projects listed in the Project Playbook (FAI projects) — ${docs.length}:`, ...names.map((n) => `• ${n}`), '', referenceFor(page)].join('\n'),
+    [{ type: 'select-category', category: 'project' }],
+    550,
+    `The Project Playbook lists ${docs.length} FAI projects: ${spokenList(names)}. The full list is on screen.`,
+  );
+}
+
+function answerBrand(kb: KnowledgeBase, interpretation: Interpretation): AssistantResponse {
+  const { docId, brand, region } = interpretation.params;
+  const brandsPage = brandsPageDoc(kb);
+  if (!brandsPage) return noAnswer();
+  const ref = referenceFor(brandsPage);
+
+  // "What brand is Celestia?" / "Is Celestia a north project?"
+  if (docId) {
+    const doc = kb.docs.find((d) => d.id === docId);
+    if (!doc) return noAnswer();
+    const docBrand = brandOfDoc(kb, doc.id);
+    if (!docBrand) return noAnswer([select(doc)]);
+    const lines = [`${doc.title} is listed under ${docBrand} on the Brands page.`];
+    if (region) {
+      const regionOf = (Object.entries(REGION_BRANDS) as Array<['north' | 'south', Brand]>).find(([, b]) => b === docBrand)?.[0];
+      const regionLabel = regionOf === 'north' ? 'North' : 'South';
+      lines.push(regionOf ? `Per the business rule (${regionLabel} projects = ${docBrand} projects), it is a ${regionLabel} project.` : `Region: ${NO_ANSWER}`);
     }
+    return reply([...lines, '', ref].join('\n'), [select(doc)], 500, lines.join(' '));
   }
-  const power = suit.powerLevel === null ? 'Power level unavailable.' : `Power at ${Math.round(suit.powerLevel)}%.`;
-  return `${repair} ${power} ${diagnosticSentence(suit)}`;
+
+  // "Prestige projects" / "North projects"
+  if (!brand) return noAnswer();
+  const docs = docsForBrand(kb, brand);
+  if (docs.length === 0) return noAnswer();
+  const intro = region ? `${region === 'north' ? 'North' : 'South'} projects = ${brand} projects (business rule).` : null;
+  const names = docs.map((d) => d.title);
+  return reply(
+    [...(intro ? [intro] : []), `${brand} projects listed on the Brands page:`, ...names.map((n) => `• ${n}`), '', ref].join('\n'),
+    [],
+    550,
+    `${intro ? `${intro} ` : ''}The Brands page lists these ${brand} projects: ${names.join(', ')}.`,
+  );
 }
 
-function statusReport(ctx: ResponseContext): string {
-  const { suits } = ctx;
-  if (suits.length === 0) return 'All systems online, sir. There are no suits on record.';
-  const count = (status: Suit['repairStatus']) => suits.filter((s) => s.repairStatus === status).length;
-  const parts = [
-    [count('operational'), 'operational'],
-    [count('repairing'), 'under repair'],
-    [count('damaged'), 'damaged'],
-    [count('offline'), 'offline'],
-  ]
-    .filter(([n]) => (n as number) > 0)
-    .map(([n, label]) => `${n} ${label}`);
-  const roster = `${suits.length} ${suits.length === 1 ? 'suit' : 'suits'} on record: ${parts.join(', ')}.`;
-  const selected = findSuit(suits, ctx.selectedSuitId ?? undefined);
-  const focus = selected ? ` ${suitStatusSentence(selected, ctx.now)}` : '';
-  const party = ctx.partyMode ? ' Party protocol is active.' : '';
-  return `All systems online, sir. ${roster}${focus}${party}`;
-}
-
-function listSuits(suits: readonly Suit[]): string {
-  if (suits.length === 0) return 'There are no suits on record, sir.';
-  const names = suits.map((s) => s.name);
-  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-  return `There ${suits.length === 1 ? 'is one suit' : `are ${suits.length} suits`} on record: ${list}.`;
-}
-
-function helpText(): string {
-  return 'I can give you a status report, repair estimates, power levels and diagnostics for any suit on record. I can also display a suit, tell you the time, welcome your guests, and engage party mode. Simply ask.';
-}
-
-/* ------------------------------------------------------------------- engine */
-
-function reply(display: string, actions: AssistantAction[] = [], processingMs = 450, bootSequence = false): AssistantResponse {
-  return { display, speech: toSpeakable(display), actions, processingMs, bootSequence };
-}
-
-function missingSuit(interpretation: Interpretation, suits: readonly Suit[]): AssistantResponse {
-  if (interpretation.params.suitQuery) {
-    return reply(`I'm afraid I have no record of a ${interpretation.params.suitQuery}, sir.`);
+function answerPerson(kb: KnowledgeBase, query: string): AssistantResponse {
+  const people = findPeopleByName(kb, query);
+  if (people.length === 0) return noAnswer();
+  const docs = new Map<string, KnowledgeDoc>();
+  // One line per distinct name/title/group, with every page that lists it.
+  const unique = new Map<string, { person: PersonEntry; pages: string[] }>();
+  for (const p of people) {
+    const doc = kb.docs.find((d) => d.id === p.docId);
+    if (doc) docs.set(doc.id, doc);
+    const key = `${p.name}|${p.title ?? ''}|${p.group ?? ''}`;
+    const entry = unique.get(key) ?? { person: p, pages: [] };
+    if (doc && !entry.pages.includes(doc.title)) entry.pages.push(doc.title);
+    unique.set(key, entry);
   }
-  if (suits.length === 0) return reply('There are no suits on record, sir. You can add one in the Workshop.');
-  return reply('Which suit, sir? Please specify a designation, such as the Mark XLIII.');
+  const lines = [...unique.values()].map(({ person, pages }) => `${formatPerson(person)}${pages.length ? ` (listed on ${pages.join(', ')})` : ''}`);
+  const conflict = new Set(people.map((p) => p.name)).size === 1 && new Set(people.map((p) => p.title)).size > 1;
+  const firstDoc = [...docs.values()][0];
+  return reply(
+    [...(conflict ? ['The configured sources list this person with different titles:'] : []), ...lines, '', ...[...docs.values()].map(referenceFor)].join('\n'),
+    firstDoc ? [select(firstDoc)] : [],
+    550,
+    [...new Map([...unique.values()].map(({ person }) => [person.name + (person.title ?? ''), person])).values()].map(speakPerson).join(' '),
+  );
 }
+
+function answerClarify(kb: KnowledgeBase, docIds: readonly string[]): AssistantResponse {
+  const titles = docIds.map((id) => kb.docs.find((d) => d.id === id)?.title).filter((t): t is string => Boolean(t));
+  if (titles.length < 2) return noAnswer();
+  return reply(`Did you mean ${titles.slice(0, -1).join(', ')} or ${titles[titles.length - 1]}?`, [], 350);
+}
+
+function answerSearch(kb: KnowledgeBase, query: string): AssistantResponse {
+  const [hit] = searchKnowledge(kb, query, 3);
+  // Require a reasonably specific match so unrelated questions don't return an unrelated passage.
+  const terms = new Set(tokenize(query)).size;
+  if (!hit || hit.score < 2 || hit.coverage < (terms >= 4 ? 0.5 : 0.6)) return noAnswer();
+
+  const { doc } = hit;
+  const section = hit.sectionIndex >= 0 ? doc.sections[hit.sectionIndex] : undefined;
+  const lines = section ? section.lines : [doc.summary, ...Object.entries(doc.facts).map(([k, v]) => `${k}: ${v}`)].filter(Boolean);
+  if (lines.length === 0) return noAnswer();
+  const heading = section?.heading ? ` — ${section.heading}` : '';
+  return reply(
+    [`${doc.title}${heading}`, ...lines, '', referenceFor(doc)].join('\n'),
+    [select(doc)],
+    800,
+    `From the ${doc.title} page${section?.heading ? `, ${section.heading}` : ''}: ${linesToSentences(lines)}`,
+  );
+}
+
+/* ------------------------------------------------------------------ engine */
 
 export function generateResponse(interpretation: Interpretation, ctx: ResponseContext): AssistantResponse {
   const random = ctx.random ?? Math.random;
-  const { now, partyMode, suits } = ctx;
-  const suit = findSuit(suits, interpretation.params.suitId);
+  const kb = ctx.knowledge;
 
-  if (interpretation.error === 'empty_input') return reply("I didn't catch that, sir.");
+  if (interpretation.error === 'empty_input') return reply("I didn't catch that.");
+  if (interpretation.error === 'knowledge_missing') {
+    return reply('The knowledge source isn’t loaded on this device yet. Open the Library and load the FAI knowledge file, then ask again.');
+  }
 
   switch (interpretation.intent) {
     case 'greeting':
-      return reply(pick(partyMode ? PARTY_GREETINGS : GREETINGS, random));
-
-    case 'status_report':
-      return reply(statusReport(ctx), [], 900);
-
-    case 'suit_status':
-      if (!suit) return missingSuit(interpretation, suits);
-      return reply(suitStatusSentence(suit, now), [{ type: 'select-suit', suitId: suit.id }], 600);
-
-    case 'repair_estimate':
-      if (!suit) return missingSuit(interpretation, suits);
-      return reply(repairSentence(suit, now, random), [{ type: 'select-suit', suitId: suit.id }], 600);
-
-    case 'power_level':
-      if (!suit) return missingSuit(interpretation, suits);
-      return reply(powerSentence(suit), [{ type: 'select-suit', suitId: suit.id }], 500);
-
-    case 'diagnostics': {
-      if (!suit) return missingSuit(interpretation, suits);
-      const notes = suit.notes.trim() ? ` Workshop notes: ${suit.notes.trim().replace(/[.!?]?$/, '.')}` : '';
-      const aside = partyMode ? ` ${pick(PARTY_DIAGNOSTIC_ASIDES, random)}` : '';
-      return reply(
-        `Diagnostics complete for the ${suit.name}. ${diagnosticSentence(suit)}${notes}${aside}`,
-        [{ type: 'select-suit', suitId: suit.id }, { type: 'diagnostics-run', suitId: suit.id }],
-        1800,
-      );
-    }
-
-    case 'show_suit':
-      if (!suit) return missingSuit(interpretation, suits);
-      return reply(
-        pick([`Displaying the ${suit.name}, sir.`, `Bringing up the ${suit.name} now.`, `Here is the ${suit.name}, sir.`], random),
-        [{ type: 'select-suit', suitId: suit.id }],
-        400,
-      );
-
-    case 'list_suits':
-      return reply(listSuits(suits));
-
-    case 'party_on':
-      if (partyMode) return reply("Party protocol is already active, sir. Any more festive and I'd need a costume of my own.");
-      return reply(
-        'Initiating party protocol. Lighting set to dramatic. Sarcasm reserves at full capacity. Good evening, ladies and gentlemen, and welcome to the workshop.',
-        [{ type: 'set-party-mode', enabled: true }],
-        1600,
-        true,
-      );
-
-    case 'party_off':
-      if (!partyMode) return reply('Party mode is not currently active, sir.');
-      return reply('Party protocol disengaged. Returning to standard operating parameters. It was fun while it lasted, sir.', [
-        { type: 'set-party-mode', enabled: false },
-      ]);
-
+      return reply(pick(GREETINGS, random));
     case 'help':
-      return reply(helpText());
-
+      return reply(
+        'I answer questions from the FAI knowledge source: projects, buildings, departments, people and procedures. For example: “How much is a 1-bedroom at 1001 Parkway?”, “How do I request a cash advance?”, “Where is Aeon Center?”, “List the Prestige projects” or “Who is on the 1001 Parkway team?”',
+      );
     case 'standby':
       return reply(pick(STANDBY, random), [{ type: 'standby' }], 300);
-
     case 'time':
-      return reply(`It is ${formatClockTime(now)}, sir.`);
-
-    case 'welcome_guests':
-      return reply(pick(partyMode ? PARTY_WELCOME : WELCOME, random));
-
-    case 'joke':
-      return reply(pick(JOKES, random));
-
+      return reply(`It is ${formatClockTime(ctx.now)}.`);
     case 'thanks':
       return reply(pick(THANKS, random));
-
     case 'identity':
-      return reply(
-        'I am AFAIK. As Far As I Know. I look after the workshop, monitor the suits, and occasionally keep you out of trouble, sir.',
-      );
-
-    case 'easter_egg': {
-      const lines = EASTER_EGGS[interpretation.params.easterEgg ?? ''];
-      return reply(lines ? pick(lines, random) : pick(UNKNOWN, random));
-    }
-
+      return reply('I am AFAIK, the FAI knowledge agent. I answer only from the configured knowledge source.');
     case 'unknown':
-      return reply(pick(partyMode ? PARTY_UNKNOWN : UNKNOWN, random), [], 350);
+      return noAnswer();
+    default:
+      break;
+  }
+
+  if (!kb) return noAnswer();
+
+  switch (interpretation.intent) {
+    case 'list_category':
+      return interpretation.params.category ? listCategory(kb, interpretation.params.category) : noAnswer();
+    case 'list_playbook':
+      return listPlaybook(kb);
+    case 'brand':
+      return answerBrand(kb, interpretation);
+    case 'person':
+      return answerPerson(kb, interpretation.params.personQuery ?? interpretation.normalizedText);
+    case 'clarify':
+      return answerClarify(kb, interpretation.params.docIds ?? []);
+    case 'show_doc':
+    case 'doc_field': {
+      const doc = kb.docs.find((d) => d.id === interpretation.params.docId);
+      if (!doc) return noAnswer();
+      const ties = (interpretation.params.docIds ?? []).map((id) => kb.docs.find((d) => d.id === id)).filter((d): d is KnowledgeDoc => Boolean(d));
+      return answerField(kb, doc, interpretation.intent === 'show_doc' ? 'overview' : (interpretation.params.field ?? 'overview'), ties);
+    }
+    case 'search':
+      return answerSearch(kb, interpretation.params.query ?? interpretation.normalizedText);
+    default:
+      return noAnswer();
   }
 }
 
 /** Interprets text and generates the response in one step. */
 export function processCommand(text: string, ctx: ResponseContext): CommandOutcome {
   const interpretation = interpretCommand(text, ctx);
-  return { interpretation, response: generateResponse(interpretation, ctx) };
+  const response = generateResponse(interpretation, ctx);
+  const answered = response.display !== NO_ANSWER;
+  return { interpretation: { ...interpretation, recognized: interpretation.recognized && answered }, response };
 }
-
-/** Exposed for the UI's "what can you do" panel. */
-export const EXAMPLE_COMMANDS = [
-  'Status report',
-  'How long for the repair on the Mark XLIII?',
-  "What's the status of the Mark XLIII?",
-  'Run diagnostics',
-  'How much power remains?',
-  'Show me the Hulkbuster',
-  'Activate party mode',
-  'Welcome our guests',
-  'Tell me a joke',
-  'What can you do?',
-  'Go to standby',
-] as const;

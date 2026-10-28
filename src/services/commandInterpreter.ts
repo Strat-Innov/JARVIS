@@ -1,15 +1,17 @@
 /**
  * Deterministic command interpreter.
  *
- * Normalises recognised speech or typed text and matches it against an ordered registry of
- * intent patterns. No LLM, no network, and nothing derived from the input is ever executed.
+ * Normalises recognised speech or typed text, then decides what is being asked: small talk,
+ * a list of pages, a page, a specific part of a page, or a free-text search. No LLM, no network,
+ * and nothing derived from the input is ever executed.
  */
-import type { Intent, Interpretation, Suit } from '../types/afaik';
-import { markNumberFromDesignation, numberToRoman, parseMarkNumber } from '../utils/time';
+import type { Brand, DocField, Intent, Interpretation, KnowledgeBase, KnowledgeCategory } from '../types/afaik';
+import { lookupDoc, MATCH_SCORE, STOPWORDS, tokenize, withinOneEdit } from './knowledgeSearch';
+import { findPeopleByName, REGION_BRANDS } from './knowledgeStructure';
 
 export interface InterpreterContext {
-  suits: readonly Suit[];
-  selectedSuitId: string | null;
+  knowledge: KnowledgeBase | null;
+  selectedDocId: string | null;
 }
 
 /**
@@ -27,6 +29,7 @@ export function normalizeCommand(text: string): string {
   let s = text
     .toLowerCase()
     .replace(/[‘’']/g, '')
+    .replace(/&/g, ' and ')
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -40,190 +43,183 @@ export function containsWakeWord(text: string): boolean {
   return WAKE_WORD_PATTERN.test(text.toLowerCase().replace(/[^a-z0-9]+/g, ' '));
 }
 
-const NUMBER_WORD =
-  '(?:(?:twenty|thirty|forty|fourty|fifty|sixty|seventy|eighty|ninety)(?:\\s+(?:one|two|three|four|five|six|seven|eight|nine))?' +
-  '|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)';
-const MARK_REFERENCE = new RegExp(`\\b(?:mark|mk|marc)\\s*(\\d{1,3}|[ivxlc]+|${NUMBER_WORD})\\b`);
+/* ----------------------------------------------------------- small talk */
 
-const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-interface SuitReference {
-  suitId?: string;
-  /** Canonical form of an unresolved reference, e.g. "Mark L". */
-  unresolved?: string;
-}
-
-/** Finds a suit mentioned in normalised text by mark number ("mark 43", "mark xliii", "mark forty three") or name. */
-export function findSuitReference(normalized: string, suits: readonly Suit[]): SuitReference | null {
-  const match = MARK_REFERENCE.exec(normalized);
-  const markNumber = match?.[1] ? parseMarkNumber(match[1]) : null;
-  if (markNumber !== null) {
-    const suit = suits.find(
-      (s) => markNumberFromDesignation(s.designation) === markNumber || markNumberFromDesignation(s.name) === markNumber,
-    );
-    return suit ? { suitId: suit.id } : { unresolved: `Mark ${numberToRoman(markNumber)}` };
-  }
-
-  const squashed = squash(normalized);
-  const byName = suits.find((s) => {
-    const name = squash(s.name);
-    const designation = squash(s.designation);
-    return (name.length >= 4 && squashed.includes(name)) || (designation.length >= 4 && squashed.includes(designation));
-  });
-  return byName ? { suitId: byName.id } : null;
-}
-
-interface IntentRule {
+interface Rule {
   intent: Intent;
   patterns: RegExp[];
-  easterEgg?: string;
 }
 
-/** Ordered registry: the first matching rule wins, so specific phrases come before broad ones. */
-const RULES: IntentRule[] = [
-  { intent: 'easter_egg', easterEgg: 'self_destruct', patterns: [/\bself destruct/] },
-  { intent: 'easter_egg', easterEgg: 'iron_man', patterns: [/\bi am iron ?man\b/, /\bim iron ?man\b/] },
-  { intent: 'easter_egg', easterEgg: 'halloween', patterns: [/\btrick or treat\b/, /\bhappy halloween\b/] },
-  { intent: 'easter_egg', easterEgg: 'costume', patterns: [/\bhow do i look\b/, /\b(?:rate|like|scan) my costume\b/, /\bwhat do you think of my costume\b/] },
-  { intent: 'easter_egg', easterEgg: 'alive', patterns: [/\bare you (?:alive|real|conscious|sentient|human)\b/] },
-  { intent: 'easter_egg', easterEgg: 'pod_bay', patterns: [/\bpod bay doors?\b/] },
-  { intent: 'easter_egg', easterEgg: 'coffee', patterns: [/\b(?:make|get|fetch|pour) me (?:a |some )?(?:coffee|drink|cocktail|tea|snack)\b/] },
-  { intent: 'easter_egg', easterEgg: 'dance', patterns: [/\b(?:can you |do you )?dance\b/, /\bplay (?:some )?music\b/] },
-  { intent: 'easter_egg', easterEgg: 'acronym', patterns: [/\bwhat does (?:afaik|a ?f ?a ?i ?k|your name) stand for\b/] },
-  {
-    intent: 'party_off',
-    patterns: [
-      /\b(?:deactivate|disable|end|stop|cancel|terminate|turn off|shut down|exit|leave|kill)\b.*\bparty\b/,
-      /\bparty (?:mode |protocol )?(?:off|over)\b/,
-      /\bpartys over\b/,
-      /\b(?:normal|standard|regular) (?:mode|operations?)\b/,
-    ],
-  },
-  {
-    intent: 'party_on',
-    patterns: [
-      /\b(?:activate|enable|start|engage|initiate|begin|turn on|launch|commence)\b.*\bparty\b/,
-      /\bparty (?:mode|protocol|time)\b/,
-      /\blets party\b/,
-      /\bparty on\b/,
-    ],
-  },
-  {
-    intent: 'standby',
-    patterns: [/\bstand ?by\b/, /\bstand down\b/, /\bgo to sleep\b/, /\bthat ?(?:will|ll) be all\b/, /\bgoodnight\b|\bgood night\b/],
-  },
-  {
-    intent: 'help',
-    patterns: [
-      /\bwhat (?:can|else can) you do\b/,
-      /\bwhat do you do\b/,
-      /\bhelp\b/,
-      /\b(?:list|available|your|what) (?:of )?commands\b/,
-      /\bcapabilities\b/,
-    ],
-  },
-  {
-    intent: 'welcome_guests',
-    patterns: [/\b(?:welcome|greet|say hello to|say hi to|introduce yourself to)\b.*\b(?:guests?|everyone|everybody|people|friends|crowd|room)\b/],
-  },
+const SMALL_TALK: Rule[] = [
+  { intent: 'standby', patterns: [/^(?:go to )?stand ?by$/, /\bstand down\b/, /\bgo to sleep\b/, /\bthat ?(?:will|ll) be all\b/, /^(?:goodbye|bye|good night|goodnight)$/] },
+  { intent: 'help', patterns: [/\bwhat (?:can|else can) you do\b/, /^help$/, /\bhow do i use (?:you|this)\b/, /\bwhat can i ask\b/, /\bcapabilities\b/] },
   { intent: 'identity', patterns: [/\bwho are you\b/, /\bintroduce yourself\b/, /\bwhat are you\b/, /\bwhats your name\b/, /\bwhat is your name\b/] },
-  {
-    intent: 'diagnostics',
-    patterns: [/\bdiagnos(?:tic|tics|e|is)\b/, /\b(?:run|perform|start|do) (?:a )?(?:full )?(?:system |systems )?(?:scan|check|systems check)\b/, /\bscan\b/],
-  },
-  {
-    intent: 'repair_estimate',
-    patterns: [
-      /\bhow long\b/,
-      /\beta\b/,
-      /\btime (?:remaining|left)\b/,
-      /\bwhat time will\b/,
-      /\bwhen (?:will|is|does|can|should)\b.*\b(?:ready|done|finished|complete|completed|repaired|fixed|operational|back)\b/,
-      /\brepair/,
-      /\bfix(?:ed)?\b/,
-    ],
-  },
-  { intent: 'power_level', patterns: [/\bpower\b/, /\bbatter(?:y|ies)\b/, /\benergy\b/, /\bcharge\b/, /\breactor\b/] },
-  {
-    intent: 'list_suits',
-    patterns: [
-      /\b(?:list|which|what|all|available) (?:the |of the |of )?(?:suits|armou?rs)\b/,
-      /\bsuits (?:are |do (?:i|we) have)/,
-      /\bhow many suits\b/,
-    ],
-  },
-  { intent: 'show_suit', patterns: [/\b(?:show|display|bring up|pull up|select|open|switch to|load|let me see)\b/] },
-  {
-    intent: 'suit_status',
-    patterns: [/\bhow (?:is|s) (?:the )?(?:mark|mk|suit)\b/, /\b(?:suit|armou?r) (?:status|report|condition)\b/, /\bcondition\b/],
-  },
-  {
-    intent: 'status_report',
-    patterns: [/\bstatus\b/, /\bsitrep\b/, /\breport\b/, /\bhow are (?:we|things) (?:doing|looking)\b/, /\bupdate me\b/, /\bbring me up to speed\b/],
-  },
-  { intent: 'time', patterns: [/\bwhat time\b/, /\btime is it\b/, /\bcurrent time\b/] },
-  { intent: 'joke', patterns: [/\bjoke\b/, /\bmake me laugh\b/, /\bsomething funny\b/, /\bamuse me\b/] },
-  { intent: 'thanks', patterns: [/\bthank(?:s| you)\b/, /\bcheers\b/, /\b(?:good|great|nice) (?:job|work)\b/, /\bwell done\b/] },
+  { intent: 'thanks', patterns: [/^(?:thank(?:s| you)(?: very much| so much)?|cheers|great job|good job|well done|nice work)$/] },
+  { intent: 'time', patterns: [/^what time is it$/, /^(?:whats|what is) the (?:current )?time$/, /^time$/] },
   {
     intent: 'greeting',
-    patterns: [
-      /^(?:hello|hi|hey|yo|greetings|good (?:morning|afternoon|evening|day))\b/,
-      /\bare you (?:there|awake|online)\b/,
-      /\byou there\b/,
-      /\bwake up\b/,
-      /\bhow are you\b/,
-      /\b(?:im|i am) (?:home|back)\b/,
-    ],
+    patterns: [/^(?:hello|hi|hey|yo|greetings|good (?:morning|afternoon|evening|day))$/, /^(?:are you (?:there|awake|online)|you there|wake up|how are you)$/],
   },
 ];
 
-/** Intents that operate on a specific suit. */
-const SUIT_INTENTS: ReadonlySet<Intent> = new Set(['suit_status', 'repair_estimate', 'diagnostics', 'power_level', 'show_suit']);
+const GREETING_PREFIX = /^(?:hello|hi|hey|good (?:morning|afternoon|evening|day))\s+/;
+
+/* --------------------------------------------------------- list requests */
+
+const CATEGORY_WORDS: Record<KnowledgeCategory, RegExp> = {
+  project: /^(?:projects?|developments?|properties|property|residential|residences|estates?|townships?|condos?|condominiums?)$/,
+  building: /^(?:buildings?|offices?|locations?|establishments?|landmarks?|places?|tenants?|locators?)$/,
+  department: /^(?:departments?|teams?|groups?|divisions?|units?)$/,
+  procedure: /^(?:procedures?|processes|process|forms?|permits?|requests?|guides?|policies)$/,
+  news: /^(?:news|events?|announcements?|updates?|features?|stories)$/,
+  general: /^(?:tools?|resources?|systems?|apps?|platforms?)$/,
+};
+
+const LIST_FILLER = new Set(
+  'list show me all the what which are there do you have available our your of can tell about know give a an in on filinvest city fai current any kinds kind types type see'.split(' '),
+);
+
+function detectListCategory(normalized: string): KnowledgeCategory | null {
+  if (!/^(?:list|show|what|which|all|give|tell)\b/.test(normalized)) return null;
+  const words = normalized.split(' ').filter((w) => !LIST_FILLER.has(w));
+  if (words.length === 0 || words.length > 2) return null;
+  for (const [category, pattern] of Object.entries(CATEGORY_WORDS) as Array<[KnowledgeCategory, RegExp]>) {
+    if (words.every((w) => pattern.test(w))) return category;
+  }
+  return null;
+}
+
+/* ------------------------------------------------------- field questions */
+
+/** Ordered: the first matching field wins, so specific phrasings come first. */
+const FIELD_PATTERNS: Array<[DocField, RegExp]> = [
+  ['approval_time', /\b(?:approval time|turnaround|processing time|how long (?:does|will|is) (?:it|the|approval|processing)|how long to (?:approve|process))/],
+  ['parking', /\bparking\b|\bslots?\b/],
+  ['transport', /\b(?:shuttle|bus|transport|transportation|commute|fare|loop|jeep|jeepney|terminal schedule)\b/],
+  ['payment', /\b(?:payment|payments|pay|downpayment|down payment|installment|instalment|financing|deferred|terms|schemes?|discount)\b/],
+  ['pricing', /\b(?:price|prices|pricing|priced|cost|costs|how much|per sqm|per square|lot sizes?|unit sizes?|sqm|cheapest|expensive|budget for)\b/],
+  ['amenities', /\b(?:amenities|amenity|facilities|facility|pool|gym|clubhouse|playground)\b/],
+  ['units', /\b(?:how many units|number of units|no of units|total units)\b/],
+  ['turnover', /\b(?:turnover|turn over|completion date|when (?:will|is) (?:it|this) (?:be )?(?:finished|completed|done|ready))\b/],
+  ['status', /\b(?:status|rfo|ready for occupancy|pre ?selling|is it ready)\b/],
+  ['requirements', /\b(?:requirements?|required|need to (?:bring|submit|prepare)|what do i need|prerequisites?)\b/],
+  ['documents', /\b(?:forms?|documents?|templates?|download)\b/],
+  ['team', /\b(?:who|contact|contacts|email|e mail|team|manager|in charge|head of|point person|reach)\b/],
+  ['links', /\b(?:website|facebook|instagram|socials?|virtual tour|360|link|links)\b/],
+  ['awards', /\b(?:awards?|recognition|certifications?|certified)\b/],
+  ['location', /\b(?:where|location|located|address|directions|how (?:do i|to) get (?:there|to))\b/],
+  ['process', /\b(?:how (?:do|can|should) (?:i|we)|how to|steps?|process|procedure|apply|file|submit|request)\b/],
+  ['overview', /\b(?:what is|whats|tell me about|overview|describe|about|info|information|details)\b/],
+];
+
+export function detectField(normalized: string): DocField | null {
+  return FIELD_PATTERNS.find(([, pattern]) => pattern.test(normalized))?.[0] ?? null;
+}
+
+/** Words that are neither stopwords nor field keywords — i.e. words naming a subject. */
+function contentWords(normalized: string): string[] {
+  return normalized.split(' ').filter((w) => w && !STOPWORDS.has(w) && !FIELD_PATTERNS.some(([, p]) => p.test(w)));
+}
+
+const SHOW_VERBS = /^(?:show(?: me)?|open|display|bring up|pull up|go to|select|load|let me see)\b/;
+/** Follow-up phrasings that refer to the page already on screen. */
+const DEICTIC = /\b(?:it|its|this|that|there|here|this one|this project|this building|the project|the building)\b/;
+
+/* ------------------------------------------------------- brand & region */
+
+const BRAND_WORD = /\b(prestige|aspire|filigree)\b/;
+const REGION_PROJECTS = /\b(north|south)(?:ern)?\b(?:\s+\w+){0,2}\s+projects?\b|\bprojects?\b(?:\s+\w+){0,3}\s+(?:in the )?(north|south)\b/;
+const BRAND_QUESTION = /\b(?:what|which) brand\b|\bbrand of\b|\bunder (?:what|which) brand\b|\bis (?:it|this)\b.*\b(?:prestige|aspire|filigree)\b/;
+const REGION_QUESTION = /\b(?:north|south)(?:ern)?\b|\bwhich region\b|\bwhat region\b/;
+
+function brandFromText(normalized: string): Brand | undefined {
+  const word = BRAND_WORD.exec(normalized)?.[1];
+  return word ? ((word.charAt(0).toUpperCase() + word.slice(1)) as Brand) : undefined;
+}
+
+/* ------------------------------------------------------------- interpret */
 
 export function interpretCommand(rawText: string, context: InterpreterContext): Interpretation {
-  const normalizedText = normalizeCommand(rawText);
-  const base = { rawText, normalizedText, params: {} };
+  let normalizedText = normalizeCommand(rawText);
+  const base = { rawText, params: {} };
 
-  if (!rawText.trim()) {
-    return { ...base, intent: 'unknown', recognized: false, error: 'empty_input' };
-  }
-  // A bare wake word ("AFAIK?") is a greeting.
-  if (!normalizedText) {
-    return { ...base, intent: 'greeting', recognized: true };
-  }
+  if (!rawText.trim()) return { ...base, normalizedText, intent: 'unknown', recognized: false, error: 'empty_input' };
+  if (!normalizedText) return { ...base, normalizedText, intent: 'greeting', recognized: true };
 
-  const rule = RULES.find((r) => r.patterns.some((p) => p.test(normalizedText)));
-  const reference = findSuitReference(normalizedText, context.suits);
-  let intent: Intent = rule?.intent ?? 'unknown';
+  const smallTalk = SMALL_TALK.find((r) => r.patterns.some((p) => p.test(normalizedText)));
+  if (smallTalk) return { ...base, normalizedText, intent: smallTalk.intent, recognized: true };
 
-  // "What's the status of the Mark XLIII?" is about one suit; "status report" is about everything.
-  if (intent === 'status_report' && reference) intent = 'suit_status';
-  // A bare suit name ("Mark XLIII?") reads as a status request.
-  if (intent === 'unknown' && reference && normalizedText.split(' ').length <= 4) intent = 'suit_status';
+  // "Good morning, where is Aeon Center?" — answer the question, skip the pleasantry.
+  normalizedText = normalizedText.replace(GREETING_PREFIX, '').trim();
+  const ok = (intent: Intent, params: Interpretation['params'] = {}): Interpretation => ({ ...base, normalizedText, intent, recognized: true, params });
 
-  if (intent === 'unknown') {
-    return { ...base, intent, recognized: false };
+  const { knowledge } = context;
+  if (!knowledge || knowledge.docs.length === 0) {
+    return { ...ok('search', { query: normalizedText }), error: 'knowledge_missing' };
   }
 
-  const interpretation: Interpretation = {
-    ...base,
-    intent,
-    recognized: true,
-    params: rule?.easterEgg ? { easterEgg: rule.easterEgg } : {},
-  };
+  const regionMatch = REGION_PROJECTS.exec(normalizedText);
+  const regionName = (regionMatch?.[1] ?? regionMatch?.[2]) as 'north' | 'south' | undefined;
+  const mentionsBrand = BRAND_WORD.test(normalizedText);
 
-  if (SUIT_INTENTS.has(intent)) {
-    if (reference?.suitId) {
-      interpretation.params = { suitId: reference.suitId, suitExplicit: true };
-    } else if (reference?.unresolved) {
-      interpretation.params = { suitQuery: reference.unresolved, suitExplicit: true };
-      interpretation.error = 'suit_not_found';
-    } else if (context.selectedSuitId && context.suits.some((s) => s.id === context.selectedSuitId)) {
-      interpretation.params = { suitId: context.selectedSuitId, suitExplicit: false };
-    } else {
-      interpretation.error = 'suit_not_found';
+  // Project lists come from the Project Playbook ("Projects listed in the Project Playbook are FAI projects").
+  const category = detectListCategory(normalizedText);
+  if (!mentionsBrand && !regionName && (category === 'project' || /\b(?:fai|playbook)\b.*\bprojects?\b|\bprojects?\b.*\bplaybook\b/.test(normalizedText))) {
+    return ok('list_playbook');
+  }
+  if (category) return ok('list_category', { category });
+
+  const lookup = lookupDoc(normalizeCommand(rawText), knowledge.docs);
+  let match = lookup.match;
+  const field = detectField(normalizedText);
+
+  // A single shared word ("capital", "parking") is weak evidence: every subject word in the
+  // question must belong to the page's name, and there must be at least one.
+  if (match && match.score < MATCH_SCORE.distinctive) {
+    const nameTokens = [...new Set(match.doc.aliases.flatMap((a) => tokenize(a)))];
+    const inName = (w: string) => {
+      const t = tokenize(w)[0] ?? w;
+      return nameTokens.includes(t) || nameTokens.some((n) => n.length >= 6 && withinOneEdit(n, t));
+    };
+    const words = contentWords(normalizedText).filter((w) => !BRAND_WORD.test(w) && !REGION_QUESTION.test(w));
+    if (words.length === 0 || !words.every(inName)) match = null;
+  }
+
+  // Brand / region lists: "Prestige projects", "north projects".
+  if (!match && (regionName || (mentionsBrand && /\b(?:projects?|developments?|properties)\b/.test(normalizedText)))) {
+    const brand = regionName ? REGION_BRANDS[regionName] : brandFromText(normalizedText);
+    return ok('brand', { ...(brand ? { brand } : {}), ...(regionName ? { region: regionName } : {}) });
+  }
+
+  // People: "Who is Ana Cruz?"
+  if (!match || field === 'team') {
+    if (findPeopleByName(knowledge, normalizedText).length > 0) return ok('person', { personQuery: normalizedText });
+  }
+
+  if (match) {
+    const docId = match.doc.id;
+    const docIds = lookup.ties.map((d) => d.id);
+    const extra = docIds.length > 0 ? { docIds } : {};
+    const asksRegion = REGION_QUESTION.test(normalizedText) && !field;
+    if (BRAND_QUESTION.test(normalizedText) || asksRegion) {
+      return ok('brand', { docId, docExplicit: true, ...(asksRegion ? { region: /\bsouth/.test(normalizedText) ? 'south' : 'north' } : {}) });
     }
+    if (SHOW_VERBS.test(normalizedText) && (!field || field === 'overview')) return ok('show_doc', { docId, docExplicit: true, ...extra });
+    return ok('doc_field', { docId, docExplicit: true, field: field ?? 'overview', ...extra });
   }
 
-  return interpretation;
+  // Several pages share the only name given ("Botanika") — ask one clarifying question.
+  if (lookup.candidates.length >= 2) return ok('clarify', { docIds: lookup.candidates.map((d) => d.id), ...(field ? { field } : {}) });
+
+  // Follow-up about the page on screen: "What's the price?", "Where is it?"
+  const selected = knowledge.docs.find((d) => d.id === context.selectedDocId);
+  const subjectWords = contentWords(normalizedText).filter((w) => !/^(?:units?|bedrooms?|br|one|two|three|1|2|3|studio|lots?)$/.test(w));
+  if (selected && field && field !== 'overview' && (DEICTIC.test(normalizedText) || subjectWords.length === 0)) {
+    return ok('doc_field', { docId: selected.id, docExplicit: false, field });
+  }
+  if (selected && BRAND_QUESTION.test(normalizedText) && subjectWords.filter((w) => !BRAND_WORD.test(w)).length === 0) {
+    return ok('brand', { docId: selected.id, docExplicit: false });
+  }
+
+  return ok('search', { query: normalizedText, ...(field ? { field } : {}) });
 }

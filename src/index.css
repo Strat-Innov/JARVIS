@@ -182,9 +182,6 @@
   --core-strong: #fde68a;
   --core-soft: rgba(251, 191, 36, 0.25);
 }
-.core[data-party='true']:not([data-state='error']) .core-arcs {
-  color: #c084fc;
-}
 
 .core svg {
   overflow: visible;
@@ -285,7 +282,7 @@
   animation-play-state: paused;
 }
 
-/* Party-mode initialization sweep */
+/* Initialisation sweep (knowledge loaded) */
 .core-boot {
   opacity: 0;
 }

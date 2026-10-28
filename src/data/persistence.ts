@@ -1,12 +1,11 @@
-/** localStorage persistence for suits, settings and session state. All access is guarded. */
-import type { SessionState, Settings, Suit } from '../types/afaik';
-import { DEFAULT_SETTINGS, sanitizeSettings, sanitizeSuits } from '../utils/validation';
-import { createDemoSuits, PRIMARY_SUIT_ID } from './demoData';
+/** localStorage persistence for settings, session state and the locally loaded knowledge file. All access is guarded. */
+import { KNOWLEDGE_CATEGORIES, type KnowledgeCategory, type SessionState, type Settings } from '../types/afaik';
+import { DEFAULT_SETTINGS, sanitizeSettings } from '../utils/validation';
 
 export const STORAGE_KEYS = {
-  suits: 'afaik.suits.v1',
   settings: 'afaik.settings.v1',
-  session: 'afaik.session.v1',
+  session: 'afaik.session.v2',
+  knowledge: 'afaik.knowledge.v1',
 } as const;
 
 export type KeyValueStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
@@ -40,23 +39,6 @@ function writeJson(key: string, value: unknown, store: KeyValueStore | null): bo
   }
 }
 
-/** Loads saved suits; falls back to fresh demo data when nothing valid is stored. */
-export function loadSuits(store: KeyValueStore | null = defaultStore(), now: number = Date.now()): Suit[] {
-  const saved = sanitizeSuits(readJson(STORAGE_KEYS.suits, store));
-  return saved && saved.length > 0 ? saved : createDemoSuits(now);
-}
-
-export function saveSuits(suits: Suit[], store: KeyValueStore | null = defaultStore()): boolean {
-  return writeJson(STORAGE_KEYS.suits, suits, store);
-}
-
-/** Replaces saved suits with freshly generated demo data and returns it. */
-export function resetSuits(store: KeyValueStore | null = defaultStore(), now: number = Date.now()): Suit[] {
-  const suits = createDemoSuits(now);
-  saveSuits(suits, store);
-  return suits;
-}
-
 export function loadSettings(store: KeyValueStore | null = defaultStore()): Settings {
   const saved = readJson(STORAGE_KEYS.settings, store);
   return saved === undefined ? { ...DEFAULT_SETTINGS } : sanitizeSettings(saved);
@@ -70,11 +52,45 @@ export function loadSession(store: KeyValueStore | null = defaultStore()): Sessi
   const raw = readJson(STORAGE_KEYS.session, store);
   const session = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
   return {
-    selectedSuitId: typeof session.selectedSuitId === 'string' ? session.selectedSuitId : PRIMARY_SUIT_ID,
-    partyMode: session.partyMode === true,
+    selectedDocId: typeof session.selectedDocId === 'string' ? session.selectedDocId : null,
+    selectedCategory: KNOWLEDGE_CATEGORIES.includes(session.selectedCategory as KnowledgeCategory)
+      ? (session.selectedCategory as KnowledgeCategory)
+      : 'project',
   };
 }
 
 export function saveSession(session: SessionState, store: KeyValueStore | null = defaultStore()): boolean {
   return writeJson(STORAGE_KEYS.session, session, store);
+}
+
+/** The raw knowledge file as loaded by the user. Stored only in this browser — never bundled or uploaded. */
+export interface StoredKnowledge {
+  markdown: string;
+  sourceName: string;
+  loadedAt: number;
+}
+
+export function loadStoredKnowledge(store: KeyValueStore | null = defaultStore()): StoredKnowledge | null {
+  const raw = readJson(STORAGE_KEYS.knowledge, store);
+  if (typeof raw !== 'object' || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.markdown !== 'string' || !r.markdown) return null;
+  return {
+    markdown: r.markdown,
+    sourceName: typeof r.sourceName === 'string' ? r.sourceName : 'knowledge.md',
+    loadedAt: typeof r.loadedAt === 'number' ? r.loadedAt : Date.now(),
+  };
+}
+
+/** Returns false when the browser refuses (storage blocked or full); the knowledge then lasts for this session only. */
+export function saveStoredKnowledge(knowledge: StoredKnowledge, store: KeyValueStore | null = defaultStore()): boolean {
+  return writeJson(STORAGE_KEYS.knowledge, knowledge, store);
+}
+
+export function clearStoredKnowledge(store: KeyValueStore | null = defaultStore()): void {
+  try {
+    store?.removeItem(STORAGE_KEYS.knowledge);
+  } catch {
+    /* ignore */
+  }
 }
