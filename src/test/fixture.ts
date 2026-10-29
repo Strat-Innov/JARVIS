@@ -196,5 +196,173 @@ Aspire developments are fictional township projects.
 - SharePoint site: /sites/TestKB
 `;
 
+/** FICTIONAL pages exercising export quirks: grouped empty headings, variants, wrapped lines, odd titles. */
+export const QUIRKS_MARKDOWN = `# NOVA RIDGE
+
+Nova Ridge is a fictional hillside estate used to test grouped headings in the knowledge export.
+
+## Development Details
+
+- Status: RFO
+- No of lots: 120
+- Turnover date:
+- 2020 (Phase 1)
+- 2024 (Phase 2)
+
+## Lot Sizes & Pricing
+
+## Standard Payment Schemes
+
+## Amenities
+
+Cash:
+
+100% payment; with 5% discount
+
+Installment:
+
+10% downpayment; 90% final lumpsum payable after 24 mos
+
+- Lot sizes: 200 – 400 sqm
+- Price range: P5M – P9M
+
+- Clubhouse
+- Parking Lot
+- Jogging Path
+
+## Source
+
+- Source file: NOVA-RIDGE.aspx
+- SharePoint site: /sites/TestKB
+
+---
+
+# ZENITH HOMES
+
+Zenith Homes is a fictional enclave with two offerings, used to test variant sections in the export.
+
+## Ready Homes
+
+- Status: RFO
+- Location: Test Town
+
+## Future Homes
+
+- Status: Pre-Selling
+- Location: Test Town
+
+## Lot Sizes & Pricing
+
+## Standard Payment Scheme
+
+- Price range: ₱10M–₱20M
+
+Cash:
+
+100% payment; with 10% discount
+
+## Lot Sizes & Pricing
+
+## Standard Payment Scheme
+
+- Price range: ₱30M–₱40M
+
+Cash:
+
+100% payment; with 5% discount
+
+## Source
+
+- Source file: ZENITH.aspx
+- SharePoint site: /sites/TestKB
+
+---
+
+# ORBIT MALL
+
+## Development Details
+
+- Location: Orbit Avenue
+- Total Number of Units: 80 shops
+
+## Parking
+
+- Capacity: The mall features two
+- basement levels with a total of 300 slots.
+
+## Source
+
+- Source file: ORBIT-MALL.aspx
+- SharePoint site: /sites/TestKB
+
+---
+
+# Monkey: Test Person
+
+Thanks to the fictional volunteers who helped build this test knowledge base.
+
+## Source
+
+- Source file: Credits.aspx
+- SharePoint site: /sites/TestKB
+
+---
+
+# Home
+
+## Life at FAI
+
+Work. Learn. Test.
+Life at the test company is where fictional culture comes to life, with programmes and stories for everyone.
+
+## Source
+
+- Source file: Home.aspx
+- SharePoint site: /sites/TestKB
+
+---
+
+# Finance
+
+Finance is a fictional department page used for testing the Life at FAI flow and department follow-ups.
+
+## How It Feels Working in Finance at Test Co
+
+Numbers with purpose, in a fictional team.
+
+## FINANCE LEADS
+
+- Cara D. Evans — Finance Head — cara.evans@example.com
+
+## Source
+
+- Source file: FINANCE.aspx
+- SharePoint site: /sites/TestKB
+`;
+
+/** A fictional SiteStructure, as extracted from a Master File. */
+export const FIXTURE_STRUCTURE = {
+  portfolio: [
+    { name: 'Residentials', items: [
+      { title: 'Nova Ridge', sourceFile: 'NOVA-RIDGE.aspx', label: 'Prestige', x: 24, y: 1 },
+      { title: 'Zenith Homes', sourceFile: 'ZENITH.aspx', label: 'Aspire', x: 0, y: 1 },
+    ] },
+    { name: 'Leasing', items: [{ title: 'Orbit', sourceFile: 'ORBIT-MALL.aspx', label: null, x: 0, y: 1 }] },
+  ],
+  departments: [{ title: 'Finance Department', sourceFile: 'FINANCE.aspx' }],
+};
+
+/** A minimal, entity-encoded Master File with one Project Playbook card group (fictional). */
+export const MASTER_FILE_FIXTURE = [
+  '# TEST — ASPx Codebase Master File',
+  '',
+  '## Project-Playbook.aspx',
+  '<div data-sp-canvascontrol="" data-sp-canvasdataversion="1.0" data-sp-controldata="&#123;&quot;zoneGroupMetadata&quot;&#58;&#123;&quot;type&quot;&#58;1,&quot;displayName&quot;&#58;&quot;Townships&quot;&#125;,&quot;flexibleLayoutPosition&quot;&#58;&#123;&quot;lg&quot;&#58;&#123;&quot;x&quot;&#58;24,&quot;y&quot;&#58;2&#125;&#125;&#125;"><div data-sp-webpartdata="&#123;&quot;instanceId&quot;&#58;&quot;a1&quot;,&quot;title&quot;&#58;&quot;Editorial card&quot;,&quot;serverProcessedContent&quot;&#58;&#123;&quot;htmlStrings&quot;&#58;&#123;&quot;headline&quot;&#58;&quot;&lt;h4&gt;&lt;strong&gt;Beta City&lt;/strong&gt;&lt;/h4&gt;&quot;,&quot;description&quot;&#58;&quot;&lt;p&gt;Prestige&lt;/p&gt;&quot;&#125;,&quot;links&quot;&#58;&#123;&quot;callToAction.linkUrl&quot;&#58;&quot;/sites/TestKB/SitePages/BETA-CITY.aspx?Mode=Edit&quot;&#125;&#125;,&quot;properties&quot;&#58;&#123;&quot;hideDescription&quot;&#58;true&#125;&#125;"></div></div>',
+  '<div data-sp-canvascontrol="" data-sp-canvasdataversion="1.0" data-sp-controldata="&#123;&quot;zoneGroupMetadata&quot;&#58;&#123;&quot;type&quot;&#58;1,&quot;displayName&quot;&#58;&quot;Townships&quot;&#125;,&quot;flexibleLayoutPosition&quot;&#58;&#123;&quot;lg&quot;&#58;&#123;&quot;x&quot;&#58;0,&quot;y&quot;&#58;2&#125;&#125;&#125;"><div data-sp-webpartdata="&#123;&quot;instanceId&quot;&#58;&quot;a2&quot;,&quot;title&quot;&#58;&quot;Editorial card&quot;,&quot;serverProcessedContent&quot;&#58;&#123;&quot;htmlStrings&quot;&#58;&#123;&quot;headline&quot;&#58;&quot;&lt;h4&gt;&lt;strong&gt;Alpha City&lt;/strong&gt;&lt;/h4&gt;&quot;,&quot;description&quot;&#58;&quot;&lt;p&gt;&lt;strong&gt;Filigree&lt;/strong&gt;&lt;/p&gt;&quot;&#125;,&quot;links&quot;&#58;&#123;&quot;callToAction.linkUrl&quot;&#58;&quot;/sites/TestKB/SitePages/ALPHA-CITY.aspx&quot;&#125;&#125;,&quot;properties&quot;&#58;&#123;&#125;&#125;"></div></div>',
+  '',
+  '## Other.aspx',
+  'nothing here',
+].join('\n');
+
 /** Raw SharePoint export snippet (the "Master File" format) that must be rejected. */
 export const MASTER_FILE_SNIPPET = '<mso:CanvasContent1 msdt:dt="string">&lt;div&gt;';

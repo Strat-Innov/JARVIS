@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { linesToSentences, numberToWords, toSpeakable, truncateForSpeech } from './text';
+import { linesToSentences, numberToWords, pronounceName, toSpeakable, truncateForSpeech } from './text';
 
 describe('toSpeakable', () => {
   it('reads pesos, ranges, sizes and bedrooms naturally', () => {
@@ -10,10 +10,20 @@ describe('toSpeakable', () => {
     expect(toSpeakable('Status: RFO')).toBe('Status: ready for occupancy');
   });
 
-  it('drops emails and URLs and spells the assistant name', () => {
+  it('drops emails and URLs', () => {
     expect(toSpeakable('Ana Cruz — Manager — ana.cruz@example.com')).toBe('Ana Cruz, Manager');
     expect(toSpeakable('See https://example.com/x now')).toBe('See now');
-    expect(toSpeakable('I am AFAIK.')).toBe('I am A. F. A. I. K.');
+  });
+
+  it('reads 1001 the FAI way', () => {
+    expect(toSpeakable('Where is 1001 Parkway Residences?')).toBe('Where is ten-oh-one Parkway Residences?');
+  });
+
+  it('pronounces AFAIK as "a-fake" or letter by letter', () => {
+    const text = toSpeakable('I am A.F.A.I.K. and AFAIK helps.');
+    expect(text).toBe('I am AFAIK and AFAIK helps.');
+    expect(pronounceName(text, 'word')).toBe('I am uh-fake and uh-fake helps.');
+    expect(pronounceName(text, 'letters')).toBe('I am A. F. A. I. K. and A. F. A. I. K. helps.');
   });
 });
 

@@ -7,7 +7,7 @@
  */
 import type { Brand, DocField, Intent, Interpretation, KnowledgeBase, KnowledgeCategory } from '../types/afaik';
 import { lookupDoc, MATCH_SCORE, STOPWORDS, tokenize, withinOneEdit } from './knowledgeSearch';
-import { findPeopleByName, REGION_BRANDS } from './knowledgeStructure';
+import { findPeopleByName, portfolioGroups, REGION_BRANDS } from './knowledgeStructure';
 
 export interface InterpreterContext {
   knowledge: KnowledgeBase | null;
@@ -18,7 +18,7 @@ export interface InterpreterContext {
  * The wake word "AFAIK", spoken letter by letter. Recognisers return it as "AFAIK", "A.F.A.I.K."
  * or "a f a i k"; text is lowercased with punctuation turned into spaces before matching.
  */
-export const WAKE_WORD_PATTERN = /\b(?:afaik|a ?f ?a ?i ?k)\b/;
+export const WAKE_WORD_PATTERN = /\b(?:afaik|a ?f ?a ?i ?k|a ?fake|uh ?fake)\b/;
 
 const LEADING_FILLER = /^(?:(?:hey|ok|okay|hi|so|um|uh|right|now)\s+)*/;
 const WAKE_PREFIX = new RegExp(`^(?:(?:hey|ok|okay|hi)\\s+)?${WAKE_WORD_PATTERN.source}\\s*`);
@@ -32,7 +32,9 @@ export function normalizeCommand(text: string): string {
     .replace(/&/g, ' and ')
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()
+    // "Ten-oh-one Parkway" is how 1001 Parkway is said.
+    .replace(/\b(?:ten|10) ?(?:oh|o|zero|0) ?(?:one|1)\b/g, '1001');
   s = s.replace(WAKE_PREFIX, '').replace(WAKE_SUFFIX, '').trim();
   s = s.replace(LEADING_FILLER, '').replace(/^please\s+|\s+please$/g, '').trim();
   return s;
@@ -125,6 +127,23 @@ const SHOW_VERBS = /^(?:show(?: me)?|open|display|bring up|pull up|go to|select|
 /** Follow-up phrasings that refer to the page already on screen. */
 const DEICTIC = /\b(?:it|its|this|that|there|here|this one|this project|this building|the project|the building)\b/;
 
+/* ------------------------------------------------- guided conversations */
+
+const LIFE_AT_FAI =
+  /\blife (?:at|in) (?:fai|the office|work|the company)\b|\b(?:at|in) the office\b|\boffice life\b|\bwork(?:ing)? (?:at|in) fai\b|\b(?:work|company|office) culture\b|\bwhat is it like (?:to work|working)\b|^life at fai$/;
+const PORTFOLIO = /\b(?:our|fai|the|your) (?:portfolio|projects)\b|\bproject playbook\b|^(?:portfolio|projects)$|\bfai projects?\b/;
+
+/** Matches a Playbook group name in singular or plural ("Residential", "Office Space"). */
+function groupPattern(name: string): RegExp {
+  const words = name
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .map((w) => `${w.replace(/s$/, '')}s?`);
+  return new RegExp(`\\b${words.join('\\s+')}\\b`);
+}
+
 /* ------------------------------------------------------- brand & region */
 
 const BRAND_WORD = /\b(prestige|aspire|filigree)\b/;
@@ -162,14 +181,25 @@ export function interpretCommand(rawText: string, context: InterpreterContext): 
   const regionName = (regionMatch?.[1] ?? regionMatch?.[2]) as 'north' | 'south' | undefined;
   const mentionsBrand = BRAND_WORD.test(normalizedText);
 
-  // Project lists come from the Project Playbook ("Projects listed in the Project Playbook are FAI projects").
+  // Life at FAI / office life → ask which department.
+  if (LIFE_AT_FAI.test(normalizedText)) return ok('life_at_fai');
+
+  const lookup = lookupDoc(normalizeCommand(rawText), knowledge.docs);
+  const exactPage = lookup.match && lookup.match.score >= MATCH_SCORE.exact;
+
+  // Project Playbook groups: "Residentials", "show me the leasing projects".
+  if (!exactPage && !mentionsBrand && !regionName) {
+    const group = portfolioGroups(knowledge).find((g) => groupPattern(g.name).test(normalizedText));
+    if (group) return ok('portfolio_group', { group: group.name });
+  }
+
+  // Our portfolio / our projects → ask what they'd like to know (Project Playbook).
   const category = detectListCategory(normalizedText);
-  if (!mentionsBrand && !regionName && (category === 'project' || /\b(?:fai|playbook)\b.*\bprojects?\b|\bprojects?\b.*\bplaybook\b/.test(normalizedText))) {
-    return ok('list_playbook');
+  if (!mentionsBrand && !regionName && (category === 'project' || PORTFOLIO.test(normalizedText))) {
+    return ok('portfolio');
   }
   if (category) return ok('list_category', { category });
 
-  const lookup = lookupDoc(normalizeCommand(rawText), knowledge.docs);
   let match = lookup.match;
   const field = detectField(normalizedText);
 

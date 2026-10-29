@@ -4,7 +4,7 @@
  *
  * Everything here is read from the source; nothing is inferred beyond the configured business rules.
  */
-import { BRANDS, type Brand, type KnowledgeBase, type KnowledgeDoc, type PersonEntry } from '../types/afaik';
+import { BRANDS, type Brand, type KnowledgeBase, type KnowledgeDoc, type PersonEntry, type PortfolioGroup } from '../types/afaik';
 import { normalizeText } from './knowledgeParser';
 
 /** Configured business rules: North projects = Prestige, South projects = Aspire. */
@@ -18,6 +18,10 @@ interface Derived {
   brandDocs: Map<Brand, KnowledgeDoc[]>;
   playbook: KnowledgeDoc[] | null;
   people: PersonEntry[];
+  /** Brand labels shown on Project Playbook cards (Master File). */
+  cardBrandOf: Map<string, Brand>;
+  /** Pages whose brand comes from the Brands page itself. */
+  brandsPageIds: Set<string>;
 }
 
 const fileKey = (file: string) => file.toLowerCase().replace(/\?.*$/, '');
@@ -71,7 +75,25 @@ function derive(kb: KnowledgeBase): Derived {
     ? [...new Set(playbookPage.refGroups.flatMap((g) => g.refs).map((r) => findPage(kb, r)).filter((d): d is KnowledgeDoc => Boolean(d)))]
     : null;
 
-  return { byFile, brandOf, brandDocs, playbook, people: kb.docs.flatMap(parsePeople) };
+  const brandsPageIds = new Set(brandOf.keys());
+  const cardBrandOf = new Map<string, Brand>();
+  for (const group of kb.structure?.portfolio ?? []) {
+    for (const item of group.items) {
+      const brand = BRANDS.find((b) => b.toLowerCase() === (item.label ?? '').trim().toLowerCase());
+      const doc = findPage(kb, item.sourceFile);
+      if (brand && doc) cardBrandOf.set(doc.id, brand);
+    }
+  }
+  // Pages the Brands page doesn't list can still carry a visible brand label on their Playbook card.
+  for (const [docId, brand] of cardBrandOf) {
+    if (brandOf.has(docId)) continue;
+    const doc = kb.docs.find((d) => d.id === docId);
+    if (!doc) continue;
+    brandOf.set(docId, brand);
+    brandDocs.set(brand, [...(brandDocs.get(brand) ?? []), doc]);
+  }
+
+  return { byFile, brandOf, brandDocs, playbook, people: kb.docs.flatMap(parsePeople), cardBrandOf, brandsPageIds };
 }
 
 function get(kb: KnowledgeBase): Derived {
@@ -118,4 +140,53 @@ export function findPeopleByName(kb: KnowledgeBase, question: string): PersonEnt
       .filter((w) => w.length >= 3);
     return nameWords.length >= 2 && nameWords.filter((w) => words.has(w)).length >= 2;
   });
+}
+
+/** Where a page's brand comes from: the Brands page, or the visible label on its Project Playbook card. */
+export function brandSource(kb: KnowledgeBase, docId: string): 'brands-page' | 'playbook-card' | null {
+  const derived = get(kb);
+  if (derived.brandsPageIds.has(docId)) return 'brands-page';
+  return derived.cardBrandOf.has(docId) ? 'playbook-card' : null;
+}
+
+/** When the Brands page and a Playbook card label disagree, both values (for conflict reporting). */
+export function brandConflict(kb: KnowledgeBase, docId: string): { brandsPage: Brand; card: Brand } | null {
+  const derived = get(kb);
+  const card = derived.cardBrandOf.get(docId);
+  const page = derived.brandOf.get(docId);
+  return card && page && card !== page ? { brandsPage: page, card } : null;
+}
+
+export function docForPage(kb: KnowledgeBase, file: string): KnowledgeDoc | undefined {
+  return findPage(kb, file);
+}
+
+/** Project Playbook groups (Townships, Residentials, …) with their linked pages, when the Master File was loaded. */
+export function portfolioGroups(kb: KnowledgeBase): Array<PortfolioGroup & { docs: Array<{ title: string; doc: KnowledgeDoc | undefined; label: string | null }> }> {
+  return (kb.structure?.portfolio ?? []).map((g) => ({
+    ...g,
+    // Visual order on the page: top-to-bottom, then left-to-right.
+    docs: [...g.items].sort((a, b) => a.y - b.y || a.x - b.x).map((item) => ({ title: item.title, doc: findPage(kb, item.sourceFile), label: item.label })),
+  }));
+}
+
+export function findPortfolioGroup(kb: KnowledgeBase, name: string) {
+  const n = normalizeText(name);
+  return portfolioGroups(kb).find((g) => normalizeText(g.name) === n);
+}
+
+/** Department pages for "Life at FAI": the page's "Know More" cards, or department pages as a fallback. */
+export function departmentDocs(kb: KnowledgeBase): Array<{ title: string; doc: KnowledgeDoc }> {
+  const cards = kb.structure?.departments ?? [];
+  if (cards.length > 0) {
+    return cards
+      .map((c) => {
+        const doc =
+          (c.sourceFile ? findPage(kb, c.sourceFile) : undefined) ??
+          kb.docs.find((d) => d.category === 'department' && normalizeText(d.title.replace(/\([^)]*\)/g, '')) === normalizeText(c.title.replace(/\([^)]*\)/g, '')));
+        return doc ? { title: c.title, doc } : null;
+      })
+      .filter((x): x is { title: string; doc: KnowledgeDoc } => x !== null);
+  }
+  return kb.docs.filter((d) => d.category === 'department').map((doc) => ({ title: doc.title, doc }));
 }

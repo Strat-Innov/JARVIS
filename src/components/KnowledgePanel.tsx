@@ -35,11 +35,11 @@ function Section({ title, children, className = '' }: { title: string; children:
 }
 
 const QUICK_COMMANDS: Array<{ label: string; command: string; icon: ReactNode }> = [
-  { label: 'FAI projects', command: 'List the FAI projects', icon: <FolderKanban size={16} aria-hidden /> },
+  { label: 'Our projects', command: 'What are our projects?', icon: <FolderKanban size={16} aria-hidden /> },
+  { label: 'Life at FAI', command: 'Tell me about life at FAI', icon: <Users size={16} aria-hidden /> },
   { label: 'Prestige', command: 'List the Prestige projects', icon: <Building2 size={16} aria-hidden /> },
   { label: 'Aspire', command: 'List the Aspire projects', icon: <Building2 size={16} aria-hidden /> },
   { label: 'Procedures', command: 'List the procedures', icon: <FileText size={16} aria-hidden /> },
-  { label: 'Departments', command: 'List the departments', icon: <Users size={16} aria-hidden /> },
   { label: 'Help', command: 'What can you do?', icon: <HelpCircle size={16} aria-hidden /> },
 ];
 

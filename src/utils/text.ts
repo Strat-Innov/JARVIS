@@ -32,8 +32,10 @@ const trimNumber = (n: string) => n.replace(/,/g, '').replace(/\.0+$/, '').repla
 export function toSpeakable(text: string): string {
   return (
     text
-      // Spell the assistant's name out so voices don't read it as a word.
-      .replace(/\bA\.?F\.?A\.?I\.?K\b\.?/g, 'A. F. A. I. K.')
+      // The name is pronounced at speak time (see pronounceName); normalise its spellings here.
+      .replace(/\bA\.F\.A\.I\.K\.?/g, 'AFAIK')
+      // FAI says "ten-oh-one", not "one thousand and one".
+      .replace(/\b1001\b/g, 'ten-oh-one')
       .replace(/\s*[—–-]?\s*\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b/g, '')
       .replace(/https?:\/\/\S+/g, '')
       .replace(/\b(\d)\s?-?\s?BR\b/gi, (_m, n: string) => `${numberToWords(Number(n))}-bedroom`)
@@ -56,6 +58,13 @@ export function toSpeakable(text: string): string {
       .replace(/\s{2,}/g, ' ')
       .trim()
   );
+}
+
+export type NameStyle = 'word' | 'letters';
+
+/** Says "AFAIK" as /əˈfeɪk/ ("a-fake") or letter by letter. */
+export function pronounceName(text: string, style: NameStyle): string {
+  return text.replace(/\bAFAIK\b/g, style === 'letters' ? 'A. F. A. I. K.' : 'uh-fake');
 }
 
 /** Shortens text for speech at a sentence boundary near `maxChars`. */

@@ -19,8 +19,8 @@ import {
   type RecognitionSession,
 } from '../services/speechRecognition';
 import { cancelSpeech, isSynthesisSupported, speak, unlockSynthesis } from '../services/speechSynthesis';
-import type { AssistantAction, AssistantState, HistoryEntry, KnowledgeBase, Settings } from '../types/afaik';
-import { toSpeakable } from '../utils/text';
+import type { AssistantAction, AssistantState, FollowUp, FollowUpOption, HistoryEntry, KnowledgeBase, Settings } from '../types/afaik';
+import { pronounceName, toSpeakable } from '../utils/text';
 
 export interface VoiceAssistantOptions {
   knowledge: KnowledgeBase | null;
@@ -55,6 +55,9 @@ export function useVoiceAssistant(options: VoiceAssistantOptions) {
   const [handsFree, setHandsFreeState] = useState(false);
   const [booting, setBooting] = useState(false);
   const [speechPulse, setSpeechPulse] = useState(0);
+  /** Choices offered by the latest answer (e.g. "Which department?"). */
+  const [followUp, setFollowUp] = useState<FollowUp | null>(null);
+  const followUpRef = useRef<FollowUp | null>(null);
 
   const latest = useRef(options);
   latest.current = options;
@@ -101,7 +104,7 @@ export function useVoiceAssistant(options: VoiceAssistantOptions) {
   }, []);
 
   // Declared via ref so startSession and runInput can call each other.
-  const runInputRef = useRef<(text: string, source: HistoryEntry['source']) => Promise<void>>(async () => {});
+  const runInputRef = useRef<(text: string, source: HistoryEntry['source'], chosen?: FollowUpOption) => Promise<void>>(async () => {});
 
   const startSession = useCallback(
     (kind: SessionKind) => {
@@ -230,7 +233,7 @@ export function useVoiceAssistant(options: VoiceAssistantOptions) {
   );
 
   const runInput = useCallback(
-    async (text: string, source: HistoryEntry['source']) => {
+    async (text: string, source: HistoryEntry['source'], chosen?: FollowUpOption) => {
       const trimmed = text.trim();
       if (!trimmed) return;
       const normalized = normalizeCommand(trimmed);
@@ -250,7 +253,10 @@ export function useVoiceAssistant(options: VoiceAssistantOptions) {
 
       try {
         const { knowledge, selectedDocId } = latest.current;
-        const { interpretation, response } = processCommand(trimmed, { knowledge, selectedDocId, now });
+        const pendingOptions = followUpRef.current?.options ?? [];
+        const { interpretation, response } = processCommand(trimmed, { knowledge, selectedDocId, now, pendingOptions }, chosen);
+        followUpRef.current = response.followUp ?? null;
+        setFollowUp(response.followUp ?? null);
 
         sfx('acknowledge');
 
@@ -286,7 +292,7 @@ export function useVoiceAssistant(options: VoiceAssistantOptions) {
         const { settings, voice } = latest.current;
         if (settings.speechEnabled && isSynthesisSupported()) {
           setState('speaking');
-          await speak(response.speech, {
+          await speak(pronounceName(response.speech, settings.nameStyle), {
             voice,
             rate: settings.rate,
             pitch: settings.pitch,
@@ -358,6 +364,15 @@ export function useVoiceAssistant(options: VoiceAssistantOptions) {
     [runInput],
   );
 
+  /** Runs a follow-up option the user tapped. */
+  const chooseOption = useCallback(
+    (option: FollowUpOption) => {
+      unlockSynthesis();
+      void runInput(option.text, 'text', option);
+    },
+    [runInput],
+  );
+
   /** Stops speech immediately. */
   const interrupt = useCallback(() => cancelSpeech(), []);
 
@@ -378,7 +393,7 @@ export function useVoiceAssistant(options: VoiceAssistantOptions) {
     setState('speaking');
     const { settings, voice } = latest.current;
     try {
-      await speak(toSpeakable(text), {
+      await speak(pronounceName(toSpeakable(text), settings.nameStyle), {
         voice: voiceOverride ?? voice,
         rate: settings.rate,
         pitch: settings.pitch,
@@ -432,6 +447,8 @@ export function useVoiceAssistant(options: VoiceAssistantOptions) {
     submitText,
     interrupt,
     speakText,
+    followUp,
+    chooseOption,
     playBootSequence,
   };
 }

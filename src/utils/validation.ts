@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS: Settings = {
   speechEnabled: true,
   soundEffectsEnabled: true,
   activationMode: 'push-to-talk',
+  nameStyle: 'word',
 };
 
 export const RATE_RANGE = { min: 0.6, max: 1.5 } as const;
@@ -30,5 +31,6 @@ export function sanitizeSettings(input: unknown): Settings {
     activationMode: ACTIVATION_MODES.includes(raw.activationMode as ActivationMode)
       ? (raw.activationMode as ActivationMode)
       : DEFAULT_SETTINGS.activationMode,
+    nameStyle: raw.nameStyle === 'letters' ? 'letters' : 'word',
   };
 }

@@ -14,7 +14,10 @@ describe('normalisation and wake word', () => {
     expect(normalizeCommand('Status of A.F.A.I.K.')).toBe('status of');
     expect(normalizeCommand('Sales & Leasing')).toBe('sales and leasing');
     expect(containsWakeWord('a f a i k list projects')).toBe(true);
-    expect(containsWakeWord('a fake moustache')).toBe(false);
+    // "a fake" is how AFAIK is pronounced, so it counts as the wake word.
+    expect(containsWakeWord('a fake list projects')).toBe(true);
+    expect(containsWakeWord('run diagnostics')).toBe(false);
+    expect(normalizeCommand('Where is ten oh one Parkway')).toBe('where is 1001 parkway');
   });
 });
 
@@ -91,7 +94,7 @@ describe('ambiguity and conflicts', () => {
 describe('projects, brands and regions', () => {
   it('lists FAI projects from the Project Playbook', () => {
     const { interpretation, response } = ask('List the projects');
-    expect(interpretation.intent).toBe('list_playbook');
+    expect(interpretation.intent).toBe('portfolio');
     expect(response.display).toContain('Projects listed in the Project Playbook (FAI projects) — 2');
     expect(response.display).toContain('Orion Heights Residences');
     expect(response.display).toContain('Lyrium Tower 1');

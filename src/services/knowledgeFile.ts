@@ -3,7 +3,11 @@
  * that contains it. Nothing is uploaded anywhere.
  */
 
+import type { SiteStructure } from '../types/afaik';
+import { extractSiteStructure } from './siteStructure';
+
 const MAX_MARKDOWN_BYTES = 8 * 1024 * 1024;
+const MAX_MASTER_BYTES = 150 * 1024 * 1024;
 
 export class KnowledgeFileError extends Error {}
 
@@ -78,6 +82,20 @@ export function assertKnowledgeMarkdown(text: string): void {
 export interface LoadedKnowledgeFile {
   markdown: string;
   sourceName: string;
+  /** Portfolio groups and departments read from the Master File, when the zip includes it. */
+  structure?: SiteStructure | null;
+}
+
+/** Reads navigation structure from the Master File in the zip, if present. Failures are non-fatal. */
+async function readStructure(buffer: ArrayBuffer, entries: ZipEntry[]): Promise<SiteStructure | null> {
+  const master = entries.find((e) => /master[_ -]?file.*\.md$/i.test(e.name));
+  if (!master || master.uncompressedSize > MAX_MASTER_BYTES) return null;
+  try {
+    return extractSiteStructure(await inflateEntry(buffer, master));
+  } catch (error) {
+    console.warn('[afaik] Could not read site structure from the Master File', error);
+    return null;
+  }
 }
 
 export async function readKnowledgeFile(file: File): Promise<LoadedKnowledgeFile> {
@@ -90,7 +108,8 @@ export async function readKnowledgeFile(file: File): Promise<LoadedKnowledgeFile
     if (entry.uncompressedSize > MAX_MARKDOWN_BYTES) throw new KnowledgeFileError('The knowledge file inside this zip is too large (over 8 MB).');
     const markdown = await inflateEntry(buffer, entry);
     assertKnowledgeMarkdown(markdown);
-    return { markdown, sourceName: entry.name.split('/').pop() ?? entry.name };
+    const structure = await readStructure(buffer, entries);
+    return { markdown, sourceName: entry.name.split('/').pop() ?? entry.name, structure };
   }
   if (file.size > MAX_MARKDOWN_BYTES) throw new KnowledgeFileError('This file is too large (over 8 MB). Load the “AI File” markdown export.');
   const markdown = await file.text();

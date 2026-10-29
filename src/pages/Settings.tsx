@@ -26,7 +26,7 @@ const MODE_INFO: Record<ActivationMode, { title: string; description: string }> 
   'wake-word': {
     title: 'Wake word “AFAIK” (experimental)',
     description:
-      'Listens continuously and only responds to speech containing “AFAIK”, spelled out letter by letter. Chrome/Edge desktop only in practice; browsers stop continuous listening periodically and it restarts automatically, so occasional misses are expected.',
+      'Listens continuously and only responds to speech containing “AFAIK” — said as “a-fake” or letter by letter. Because “a fake” is a common phrase, it can occasionally trigger by mistake. Chrome/Edge desktop only in practice; browsers stop continuous listening periodically and it restarts automatically, so occasional misses are expected.',
   },
 };
 
@@ -113,6 +113,22 @@ export function Settings({ settings, voices, recognitionSupported, busy, onChang
             </div>
           </>
         )}
+      </Group>
+
+      <Group title="Pronunciation">
+        <fieldset className="space-y-1.5">
+          <legend className="mb-1 text-sm font-semibold text-haze">Say “AFAIK” as</legend>
+          {([
+            ['word', '“a-fake” (/əˈfeɪk/)'],
+            ['letters', 'Letter by letter (A-F-A-I-K)'],
+          ] as const).map(([value, label]) => (
+            <label key={value} className="flex cursor-pointer items-center gap-2">
+              <input type="radio" name="name-style" className="accent-arc" checked={settings.nameStyle === value} onChange={() => set('nameStyle', value)} />
+              {label}
+            </label>
+          ))}
+        </fieldset>
+        <p className="text-xs text-haze">“1001” is read as “ten-oh-one”, and saying “ten-oh-one Parkway” is understood.</p>
       </Group>
 
       <Group title="Output">

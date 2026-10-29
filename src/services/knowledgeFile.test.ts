@@ -65,7 +65,7 @@ describe('knowledge file reading', () => {
       { name: 'KB_AI_File.md', text: '# Page\n\nHello world from the fixture.' },
     ]);
     const file = new File([zip.slice().buffer], 'export.zip', { type: 'application/zip' });
-    await expect(readKnowledgeFile(file)).resolves.toEqual({ markdown: '# Page\n\nHello world from the fixture.', sourceName: 'KB_AI_File.md' });
+    await expect(readKnowledgeFile(file)).resolves.toEqual({ markdown: '# Page\n\nHello world from the fixture.', sourceName: 'KB_AI_File.md', structure: null });
   });
 
   it('reads plain markdown', async () => {

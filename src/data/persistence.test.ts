@@ -12,7 +12,7 @@ describe('persistence', () => {
     const store = memoryStore();
     expect(loadStoredKnowledge(store)).toBeNull();
     expect(saveStoredKnowledge({ markdown: '# A', sourceName: 'a.md', loadedAt: 5 }, store)).toBe(true);
-    expect(loadStoredKnowledge(store)).toEqual({ markdown: '# A', sourceName: 'a.md', loadedAt: 5 });
+    expect(loadStoredKnowledge(store)).toEqual({ markdown: '# A', sourceName: 'a.md', loadedAt: 5, structure: null });
     clearStoredKnowledge(store);
     expect(store.data.has(STORAGE_KEYS.knowledge)).toBe(false);
   });

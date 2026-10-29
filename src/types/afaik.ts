@@ -55,8 +55,39 @@ export interface PersonEntry {
   docId: string;
 }
 
+export interface PortfolioItem {
+  /** Card headline, e.g. "The Crib". */
+  title: string;
+  /** Page the card links to, e.g. "The-Crib-Alabang.aspx". */
+  sourceFile: string;
+  /** Visible card description (the brand label on Residentials), or null when hidden/absent. */
+  label: string | null;
+  x: number;
+  y: number;
+}
+
+/** A Project Playbook accordion group: Townships, Residentials, Office Spaces, Commercial Lots, Leasing. */
+export interface PortfolioGroup {
+  name: string;
+  items: PortfolioItem[];
+}
+
+/** A "Know More" department card on the Life at FAI page. */
+export interface DepartmentCard {
+  title: string;
+  sourceFile: string | null;
+}
+
+/** Navigation structure read from the raw SharePoint export (Master File). */
+export interface SiteStructure {
+  portfolio: PortfolioGroup[];
+  departments: DepartmentCard[];
+}
+
 export interface KnowledgeBase {
   docs: KnowledgeDoc[];
+  /** Present when the Master File was available at load time. */
+  structure?: SiteStructure | null;
   /** File name the knowledge was loaded from. */
   sourceName: string;
   loadedAt: number;
@@ -75,6 +106,8 @@ export interface Settings {
   speechEnabled: boolean;
   soundEffectsEnabled: boolean;
   activationMode: ActivationMode;
+  /** How AFAIK says its own name: "a-fake" or letter by letter. */
+  nameStyle: 'word' | 'letters';
 }
 
 export interface SessionState {
@@ -113,6 +146,10 @@ export type Intent =
   | 'identity'
   | 'list_category'
   | 'list_playbook'
+  | 'portfolio'
+  | 'portfolio_group'
+  | 'life_at_fai'
+  | 'doc_section'
   | 'brand'
   | 'person'
   | 'clarify'
@@ -144,6 +181,10 @@ export interface Interpretation {
     region?: 'north' | 'south';
     /** Person-name words for people lookups. */
     personQuery?: string;
+    /** Project Playbook group name for portfolio_group. */
+    group?: string;
+    /** Section index for doc_section. */
+    sectionIndex?: number;
   };
   error?: InterpretationError;
 }
@@ -155,6 +196,20 @@ export type AssistantAction =
   | { type: 'select-category'; category: KnowledgeCategory }
   | { type: 'standby' };
 
+/** A choice offered after an answer; picking it runs the preset interpretation directly. */
+export interface FollowUpOption {
+  label: string;
+  /** Shown as the user's input when chosen. */
+  text: string;
+  intent: Intent;
+  params: Interpretation['params'];
+}
+
+export interface FollowUp {
+  prompt: string;
+  options: FollowUpOption[];
+}
+
 export interface AssistantResponse {
   /** Text shown on screen. */
   display: string;
@@ -163,6 +218,8 @@ export interface AssistantResponse {
   actions: AssistantAction[];
   /** Simulated processing time before replying, in ms. */
   processingMs: number;
+  /** A follow-up question with choices (e.g. "Which department?"). */
+  followUp?: FollowUp;
 }
 
 /** A complete command turn: interpretation plus generated response. */

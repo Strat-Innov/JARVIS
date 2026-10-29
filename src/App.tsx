@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AfaikCore, STATE_LABELS } from './components/AfaikCore';
 import { CommandHistory } from './components/CommandHistory';
 import { DocumentPanel } from './components/DocumentPanel';
+import { FollowUpOptions } from './components/FollowUpOptions';
 import { Drawer } from './components/Drawer';
 import { Header } from './components/Header';
 import { KnowledgePanel } from './components/KnowledgePanel';
@@ -44,7 +45,7 @@ function restoreKnowledge(): KnowledgeBase | null {
   const stored = loadStoredKnowledge();
   if (!stored) return null;
   try {
-    return parseKnowledgeMarkdown(stored.markdown, stored.sourceName, stored.loadedAt);
+    return parseKnowledgeMarkdown(stored.markdown, stored.sourceName, stored.loadedAt, stored.structure ?? null);
   } catch (error) {
     console.warn('[afaik] Saved knowledge file could not be parsed', error);
     return null;
@@ -107,9 +108,9 @@ export default function App() {
 
   const loadKnowledgeFile = useCallback(
     async (file: File) => {
-      const { markdown, sourceName } = await readKnowledgeFile(file);
-      const kb = parseKnowledgeMarkdown(markdown, sourceName);
-      const saved = saveStoredKnowledge({ markdown, sourceName, loadedAt: kb.loadedAt });
+      const { markdown, sourceName, structure } = await readKnowledgeFile(file);
+      const kb = parseKnowledgeMarkdown(markdown, sourceName, Date.now(), structure ?? null);
+      const saved = saveStoredKnowledge({ markdown, sourceName, loadedAt: kb.loadedAt, structure: structure ?? null });
       setPersisted(saved);
       setKnowledge(kb);
       setSession((s) => ({ ...s, selectedDocId: null }));
@@ -228,6 +229,7 @@ export default function App() {
             {displayText}
           </div>
           {assistant.state !== 'error' && assistant.errorMessage && <p className="text-sm text-warn">{assistant.errorMessage}</p>}
+          <FollowUpOptions followUp={assistant.followUp} disabled={busy} onChoose={assistant.chooseOption} />
           <VoiceControl assistant={assistant} activationMode={settings.activationMode} />
         </section>
 

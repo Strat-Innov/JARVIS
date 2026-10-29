@@ -1,5 +1,5 @@
 /** localStorage persistence for settings, session state and the locally loaded knowledge file. All access is guarded. */
-import { KNOWLEDGE_CATEGORIES, type KnowledgeCategory, type SessionState, type Settings } from '../types/afaik';
+import { KNOWLEDGE_CATEGORIES, type KnowledgeCategory, type SessionState, type Settings, type SiteStructure } from '../types/afaik';
 import { DEFAULT_SETTINGS, sanitizeSettings } from '../utils/validation';
 
 export const STORAGE_KEYS = {
@@ -68,6 +68,14 @@ export interface StoredKnowledge {
   markdown: string;
   sourceName: string;
   loadedAt: number;
+  /** Small navigation summary from the Master File (not the Master File itself). */
+  structure?: SiteStructure | null;
+}
+
+function isStructure(value: unknown): value is SiteStructure {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return Array.isArray(v.portfolio) && Array.isArray(v.departments);
 }
 
 export function loadStoredKnowledge(store: KeyValueStore | null = defaultStore()): StoredKnowledge | null {
@@ -79,6 +87,7 @@ export function loadStoredKnowledge(store: KeyValueStore | null = defaultStore()
     markdown: r.markdown,
     sourceName: typeof r.sourceName === 'string' ? r.sourceName : 'knowledge.md',
     loadedAt: typeof r.loadedAt === 'number' ? r.loadedAt : Date.now(),
+    structure: isStructure(r.structure) ? r.structure : null,
   };
 }
 
