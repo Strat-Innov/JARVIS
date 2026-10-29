@@ -60,11 +60,19 @@ export function toSpeakable(text: string): string {
   );
 }
 
-export type NameStyle = 'word' | 'letters';
+export type NameStyle = 'word' | 'phonetic' | 'letters';
 
-/** Says "AFAIK" as /əˈfeɪk/ ("a-fake") or letter by letter. */
+const NAME_SPEECH: Record<NameStyle, string> = {
+  /** /əˈfeɪk/ — rhymes with "a fake". */
+  word: 'uh-fake',
+  /** /æ fɑː ɪk/ — the letters' sounds blended: "Ah-fah-ick". */
+  phonetic: 'Ah-fah-ick',
+  letters: 'A. F. A. I. K.',
+};
+
+/** Says "AFAIK" in the chosen style. */
 export function pronounceName(text: string, style: NameStyle): string {
-  return text.replace(/\bAFAIK\b/g, style === 'letters' ? 'A. F. A. I. K.' : 'uh-fake');
+  return text.replace(/\bAFAIK\b/g, NAME_SPEECH[style]);
 }
 
 /** Shortens text for speech at a sentence boundary near `maxChars`. */

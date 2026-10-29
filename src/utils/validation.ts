@@ -31,6 +31,6 @@ export function sanitizeSettings(input: unknown): Settings {
     activationMode: ACTIVATION_MODES.includes(raw.activationMode as ActivationMode)
       ? (raw.activationMode as ActivationMode)
       : DEFAULT_SETTINGS.activationMode,
-    nameStyle: raw.nameStyle === 'letters' ? 'letters' : 'word',
+    nameStyle: raw.nameStyle === 'letters' || raw.nameStyle === 'phonetic' ? raw.nameStyle : 'word',
   };
 }

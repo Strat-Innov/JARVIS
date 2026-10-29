@@ -18,7 +18,7 @@ export interface InterpreterContext {
  * The wake word "AFAIK", spoken letter by letter. Recognisers return it as "AFAIK", "A.F.A.I.K."
  * or "a f a i k"; text is lowercased with punctuation turned into spaces before matching.
  */
-export const WAKE_WORD_PATTERN = /\b(?:afaik|a ?f ?a ?i ?k|a ?fake|uh ?fake)\b/;
+export const WAKE_WORD_PATTERN = /\b(?:afaik|a ?f ?a ?i ?k|a ?fake|uh ?fake|ah ?fah? ?ick|afa ?ick|afaick)\b/;
 
 const LEADING_FILLER = /^(?:(?:hey|ok|okay|hi|so|um|uh|right|now)\s+)*/;
 const WAKE_PREFIX = new RegExp(`^(?:(?:hey|ok|okay|hi)\\s+)?${WAKE_WORD_PATTERN.source}\\s*`);

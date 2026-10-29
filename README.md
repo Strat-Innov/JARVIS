@@ -74,7 +74,7 @@ Project areas come from the Project Playbook and Brands pages. Brand labels come
 - Speech recognition works in Chrome, Edge and Safari. It isn't available in Firefox, where the text box still works. Chrome and Edge need an internet connection for recognition.
 - The microphone requires HTTPS (Vercel provides it) or `localhost`.
 - Voices depend on the device. A British English voice is preferred, and you can choose any voice in Settings.
-- Pronunciation: **AFAIK** is said "a-fake" (/əˈfeɪk/) by default, or letter by letter (Settings → Pronunciation). **1001** is said "ten-oh-one", and "ten-oh-one Parkway" is understood when spoken. The wake word accepts "a-fake" or A-F-A-I-K; because "a fake" is a common phrase, it can occasionally trigger by mistake.
+- Pronunciation: **AFAIK** is said "a-fake" (/əˈfeɪk/) by default, "Ah-fah-ick" (/æ fɑː ɪk/), or letter by letter (Settings → Pronunciation). The wake word accepts all three. **1001** is said "ten-oh-one", and "ten-oh-one Parkway" is understood when spoken. The wake word accepts "a-fake" or A-F-A-I-K; because "a fake" is a common phrase, it can occasionally trigger by mistake.
 - Spoken answers are shortened. The full answer, with its source reference, is always on screen.
 - **Diagnostics** checks the browser's voice support and the loaded knowledge file (Project Playbook and Brands page found).
 

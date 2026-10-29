@@ -106,8 +106,8 @@ export interface Settings {
   speechEnabled: boolean;
   soundEffectsEnabled: boolean;
   activationMode: ActivationMode;
-  /** How AFAIK says its own name: "a-fake" or letter by letter. */
-  nameStyle: 'word' | 'letters';
+  /** How AFAIK says its own name: "a-fake", "Ah-fah-ick" or letter by letter. */
+  nameStyle: 'word' | 'phonetic' | 'letters';
 }
 
 export interface SessionState {

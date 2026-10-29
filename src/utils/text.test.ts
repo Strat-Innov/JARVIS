@@ -24,6 +24,7 @@ describe('toSpeakable', () => {
     expect(text).toBe('I am AFAIK and AFAIK helps.');
     expect(pronounceName(text, 'word')).toBe('I am uh-fake and uh-fake helps.');
     expect(pronounceName(text, 'letters')).toBe('I am A. F. A. I. K. and A. F. A. I. K. helps.');
+    expect(pronounceName(text, 'phonetic')).toBe('I am Ah-fah-ick and Ah-fah-ick helps.');
   });
 });
 

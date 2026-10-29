@@ -120,6 +120,7 @@ export function Settings({ settings, voices, recognitionSupported, busy, onChang
           <legend className="mb-1 text-sm font-semibold text-haze">Say “AFAIK” as</legend>
           {([
             ['word', '“a-fake” (/əˈfeɪk/)'],
+            ['phonetic', '“Ah-fah-ick” (/æ fɑː ɪk/)'],
             ['letters', 'Letter by letter (A-F-A-I-K)'],
           ] as const).map(([value, label]) => (
             <label key={value} className="flex cursor-pointer items-center gap-2">

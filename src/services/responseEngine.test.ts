@@ -16,6 +16,8 @@ describe('normalisation and wake word', () => {
     expect(containsWakeWord('a f a i k list projects')).toBe(true);
     // "a fake" is how AFAIK is pronounced, so it counts as the wake word.
     expect(containsWakeWord('a fake list projects')).toBe(true);
+    expect(containsWakeWord('ah fah ick where is vega center')).toBe(true);
+    expect(normalizeCommand('Ah fah ick, where is Vega Center?')).toBe('where is vega center');
     expect(containsWakeWord('run diagnostics')).toBe(false);
     expect(normalizeCommand('Where is ten oh one Parkway')).toBe('where is 1001 parkway');
   });
