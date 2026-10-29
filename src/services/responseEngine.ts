@@ -41,6 +41,7 @@ import {
   REGION_BRANDS,
 } from './knowledgeStructure';
 import { searchKnowledge, tokenize } from './knowledgeSearch';
+import { friendlyLinkName, keyFacts, pairLines } from './answerFormat';
 
 export interface ResponseContext extends InterpreterContext {
   now: number;
@@ -226,21 +227,78 @@ interface FieldAnswer {
   spoken: string;
 }
 
+/** Lines of the sections that answer a field, in readable form (labels paired with their values). */
+function sectionsFor(doc: KnowledgeDoc, field: DocField, factValues: Set<string> = new Set()) {
+  const source = FIELD_SOURCES[field];
+  return doc.sections.filter((s) => source.sections?.test(s.heading) && !(s.lines.length === 1 && factValues.has(s.lines[0] ?? '')));
+}
+
+function linkLines(links: readonly KnowledgeDoc['sections'][number]['links'][number][]): string[] {
+  // Only URLs that appear in the source; SharePoint-relative paths are labelled, never expanded.
+  return links.map((l) => (l.url ? `• ${friendlyLinkName(l)} — ${l.url}` : `• ${l.label} (SharePoint document; link not available in source)`));
+}
+
+/** Bullet for a content line; numbered steps, sub-items and sub-labels keep their own form. */
+const asBullet = (l: string) => (/^\d+\.\s|^ {2}– /.test(l) || l.endsWith(':') ? l : `• ${l}`);
+
+/**
+ * A readable brief of a page for "Tell me about …": description, key facts, then the page's
+ * pricing, payment terms, amenities, steps or transport — each quoted from the source.
+ */
+function docBrief(kb: KnowledgeBase, doc: KnowledgeDoc): FieldAnswer | null {
+  const summary = doc.summary || doc.sections[0]?.lines.slice(0, 3).join(' ') || '';
+  const brand = brandOfDoc(kb, doc.id);
+  const facts = keyFacts(doc, 8).map(([k, v]) => `• ${k}: ${v}`);
+  const lines: string[] = [];
+  const spoken: string[] = [summary];
+  if (summary) lines.push(summary);
+  if (facts.length > 0 || brand) {
+    lines.push('', '## Key details');
+    if (brand) lines.push(`• Brand: ${brand}`);
+    lines.push(...facts);
+    spoken.push(linesToSentences(keyFacts(doc, 4).map(([k, v]) => `${k}: ${v}`)));
+  }
+
+  const block = (title: string, field: DocField, opts: { list?: boolean; compact?: boolean } = {}) => {
+    const sections = sectionsFor(doc, field);
+    if (sections.length === 0) return;
+    lines.push('', `## ${title}`);
+    for (const s of sections) {
+      // On multi-offering pages, label each part ("Lot Sizes & Pricing — Terrace Homes" → "Terrace Homes").
+      const part = sections.length > 1 ? (s.heading.split(' — ')[1] ?? s.heading) : null;
+      const paired = pairLines(s.lines);
+      if (opts.compact) lines.push(`${part ? `${part}: ` : ''}${paired.join(' · ')}`);
+      else lines.push(...(part ? [`${part}:`] : []), ...paired.map(asBullet));
+    }
+  };
+
+  if (doc.category === 'project' || sectionsFor(doc, 'pricing').length > 0) {
+    block('Pricing', 'pricing');
+    block('Payment terms', 'payment');
+    block('Amenities', 'amenities', { compact: true });
+    block('Awards', 'awards');
+  } else if (doc.category === 'procedure') {
+    block('How to process', 'process');
+    block('Requirements', 'requirements');
+  } else if (doc.category === 'building') {
+    block('Transportation', 'transport');
+    block('Parking', 'parking');
+  }
+
+  if (lines.length === 0) return null;
+  return { lines, spoken: spoken.filter(Boolean).join(' ') };
+}
+
 /** Collects what one page says about a field, or null when it says nothing. */
 function fieldAnswer(kb: KnowledgeBase, doc: KnowledgeDoc, field: DocField): FieldAnswer | null {
-  if (field === 'overview') {
-    const facts = Object.entries(doc.facts).map(([k, v]) => `${k}: ${v}`);
-    const summary = doc.summary || doc.sections[0]?.lines.slice(0, 3).join(' ') || '';
-    if (!summary && facts.length === 0) return null;
-    return { lines: [summary, ...facts].filter(Boolean), spoken: `${summary} ${linesToSentences(facts.slice(0, 4))}` };
-  }
+  if (field === 'overview') return docBrief(kb, doc);
 
   const source = FIELD_SOURCES[field];
   const factLines = Object.entries(doc.facts)
     .filter(([k]) => source.facts?.test(k))
     .map(([k, v]) => `${k}: ${v}`);
   const factValues = new Set(factLines.map((l) => l.slice(l.indexOf(':') + 1).trim()));
-  const sections = doc.sections.filter((s) => source.sections?.test(s.heading) && !(s.lines.length === 1 && factValues.has(s.lines[0] ?? '')));
+  const sections = sectionsFor(doc, field, factValues);
   if (factLines.length === 0 && sections.length === 0) return null;
 
   if (field === 'team') {
@@ -249,17 +307,28 @@ function fieldAnswer(kb: KnowledgeBase, doc: KnowledgeDoc, field: DocField): Fie
     if (people.length > 0) return { lines: people.map(formatPerson), spoken: people.map(speakPerson).join(' ') };
   }
 
-  const lines = [...factLines];
-  for (const s of sections) {
-    if (sections.length > 1 || factLines.length > 0) lines.push(`${s.heading}:`);
-    for (const line of s.lines) {
-      const link = field === 'links' || field === 'documents' ? s.links.find((l) => l.label === line) : undefined;
-      // Only URLs that appear in the source; SharePoint-relative paths are labelled, never expanded.
-      if (!link) lines.push(line);
-      else lines.push(link.url ? `${link.label} — ${link.url}` : `${link.label} (SharePoint document; link not available in source)`);
+  if (field === 'links') {
+    const links = sections.flatMap((s) => s.links.filter((l) => l.url));
+    if (links.length > 0) {
+      const names = links.map(friendlyLinkName);
+      return { lines: linkLines(links), spoken: `Links are on screen: ${[...new Set(names)].join(', ')}.` };
     }
   }
-  return { lines, spoken: linesToSentences([...factLines, ...sections.flatMap((s) => s.lines)]) };
+
+  const lines = factLines.map((l) => `• ${l}`);
+  const spokenLines = [...factLines];
+  for (const s of sections) {
+    if (sections.length > 1 || factLines.length > 0) lines.push(`## ${s.heading}`);
+    if (field === 'documents') {
+      lines.push(...linkLines(s.links), ...s.lines.filter((l) => !s.links.some((k) => k.label === l)).map((l) => `• ${l}`));
+      spokenLines.push(...s.lines);
+      continue;
+    }
+    const paired = pairLines(s.lines);
+    lines.push(...paired.map(asBullet));
+    spokenLines.push(...paired.map((l) => l.replace(/^ {2}– /, '')));
+  }
+  return { lines, spoken: linesToSentences(spokenLines) };
 }
 
 /** Answers a field for a page, checking same-named pages for conflicts. */
@@ -284,7 +353,7 @@ function answerField(kb: KnowledgeBase, doc: KnowledgeDoc, field: DocField, ties
 
   const first = answers[0] as { doc: KnowledgeDoc; answer: FieldAnswer };
   const refs = [...new Set(answers.map((a) => referenceFor(a.doc)))];
-  const heading = field === 'overview' ? first.doc.title : `${first.doc.title} — ${label}`;
+  const heading = field === 'overview' ? `# ${first.doc.title}` : `# ${first.doc.title} — ${label}`;
   return reply(
     [heading, ...first.answer.lines, '', ...refs].join('\n'),
     [select(first.doc)],
@@ -379,9 +448,15 @@ function answerSection(kb: KnowledgeBase, doc: KnowledgeDoc, index: number): Ass
   const section = doc.sections[index];
   if (!section || section.lines.length === 0) return noAnswer([select(doc)]);
   const people = peopleOnDoc(kb, doc.id).filter((p) => section.lines.some((l) => l.startsWith(p.name)));
-  const body = people.length > 0 ? people.map(formatPerson) : section.lines;
+  const urlLinks = section.links.filter((l) => l.url);
+  const body =
+    people.length > 0
+      ? people.map(formatPerson)
+      : urlLinks.length > 0 && urlLinks.length >= section.lines.length
+        ? linkLines(urlLinks)
+        : pairLines(section.lines).map(asBullet);
   return reply(
-    [`${doc.title} — ${tidyHeading(section.heading)}`, ...body, '', referenceFor(doc)].join('\n'),
+    [`# ${doc.title} — ${tidyHeading(section.heading)}`, ...body, '', referenceFor(doc)].join('\n'),
     [select(doc)],
     550,
     `${doc.title}, ${tidyHeading(section.heading)}. ${people.length > 0 ? people.map(speakPerson).join(' ') : linesToSentences(section.lines)}`,

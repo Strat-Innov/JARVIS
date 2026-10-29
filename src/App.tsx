@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AfaikCore, STATE_LABELS } from './components/AfaikCore';
+import { AnswerText } from './components/AnswerText';
 import { CommandHistory } from './components/CommandHistory';
 import { DocumentPanel } from './components/DocumentPanel';
 import { FollowUpOptions } from './components/FollowUpOptions';
@@ -208,7 +209,7 @@ export default function App() {
           <div
             className={`shrink-0 transition-[width] duration-500 ${
               structured
-                ? 'w-[min(40vw,180px)] lg:w-[max(140px,min(100%,calc(100dvh-44rem),240px))]'
+                ? 'w-[min(32vw,140px)] lg:w-[max(96px,min(100%,calc(100dvh-50rem),170px))]'
                 : 'w-[min(70vw,300px)] sm:w-[min(50vw,360px)] lg:w-[max(160px,min(100%,calc(100dvh-36rem),520px))]'
             }`}
           >
@@ -218,15 +219,15 @@ export default function App() {
             {assistant.wakeArmed && assistant.state === 'standby' ? 'Awaiting wake word' : STATE_LABELS[assistant.state]}
           </p>
           <div
-            className={`w-full max-w-3xl leading-snug whitespace-pre-line ${assistant.state === 'error' ? 'text-warn' : 'text-ice'} ${
+            className={`w-full max-w-3xl leading-snug ${assistant.state === 'error' ? 'text-warn' : 'text-ice'} ${
               structured
                 ? 'hud-panel max-h-[55dvh] overflow-y-auto px-4 py-3 text-left text-sm sm:text-base lg:max-h-none lg:min-h-0 lg:flex-1'
-                : 'px-2 text-center text-base sm:text-lg lg:text-xl'
+                : 'px-2 text-center text-base whitespace-pre-line sm:text-lg lg:text-xl'
             }`}
             aria-live="polite"
             tabIndex={structured ? 0 : undefined}
           >
-            {displayText}
+            {structured ? <AnswerText text={displayText} /> : displayText.replace(/^# /, '')}
           </div>
           {assistant.state !== 'error' && assistant.errorMessage && <p className="text-sm text-warn">{assistant.errorMessage}</p>}
           <FollowUpOptions followUp={assistant.followUp} disabled={busy} onChoose={assistant.chooseOption} />

@@ -10,7 +10,9 @@ import type { KnowledgeBase, KnowledgeCategory, KnowledgeDoc, KnowledgeLink, Kno
 const IGNORED_SECTIONS = /^(?:quick links?|chat with afaik agent|source|socials?)$/i;
 /** H1 headings that are section labels rather than page titles. */
 const GENERIC_HEADINGS = /^(?:purpose|overview:?|knowledge-[a-z0-9]+|what are .*\?|top picks.*)$/i;
-const NOISE_LINES = /^(?:learn more|read more|click here|meet the team|know more)$/i;
+const NOISE_LINES = /^(?:learn more|read more|click here|know more)$/i;
+/** Plain text lines the export uses as section titles (e.g. a "Meet the team" label before the contacts). */
+const INLINE_HEADINGS = /^(?:meet the team|our team)$/i;
 
 /** A bare SharePoint page path, e.g. "/sites/ExampleKB/SitePages/Some-Page.aspx?Mode=Edit". */
 const PAGE_REF = /^\/sites\/[^\s/]+\/SitePages\/([^\s?#]+\.aspx)/i;
@@ -284,6 +286,11 @@ function parsePage(chunk: string, index: number): KnowledgeDoc | null {
     }
     if (current.ignored || line.trim() === '' || line.trim() === '---') continue;
     const { text, links } = parseLine(line);
+    if (INLINE_HEADINGS.test(text) && !/^\s*[-*+]\s/.test(line)) {
+      push();
+      current = { heading: 'Meet The Team', items: [], links: [], ignored: false };
+      continue;
+    }
     const ref = PAGE_REF.exec(text);
     if (ref?.[1]) {
       // Page references are navigation data, not readable text.
