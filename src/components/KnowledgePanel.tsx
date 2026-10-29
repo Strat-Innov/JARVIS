@@ -69,7 +69,7 @@ export function KnowledgePanel({ knowledge, selectedDocId, category, view, busy,
 
   return (
     <div className="flex flex-col gap-3 lg:h-full lg:min-h-0">
-      <Section title="Knowledge areas" className="flex min-h-0 flex-col lg:flex-1">
+      <Section title="Knowledge areas" className="flex min-h-0 flex-col lg:min-h-[15rem] lg:flex-1">
         {!knowledge ? (
           <div className="space-y-2 text-sm text-haze">
             <p>No knowledge source is loaded on this device.</p>
@@ -128,7 +128,7 @@ export function KnowledgePanel({ knowledge, selectedDocId, category, view, busy,
         )}
       </Section>
 
-      <Section title="Quick questions">
+      <Section title="Quick questions" className="shrink-0">
         <div className="grid grid-cols-2 gap-1.5">
           {QUICK_COMMANDS.map((q) => (
             <button key={q.label} type="button" className="hud-button text-sm" disabled={busy} onClick={() => onCommand(q.command)}>
@@ -139,7 +139,7 @@ export function KnowledgePanel({ knowledge, selectedDocId, category, view, busy,
         </div>
       </Section>
 
-      <Section title="Systems">
+      <Section title="Systems" className="shrink-0">
         <nav className="grid grid-cols-3 gap-1.5" aria-label="Systems">
           {nav.map((item) => (
             <button

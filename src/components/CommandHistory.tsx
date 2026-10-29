@@ -26,7 +26,7 @@ export function CommandHistory({ history, interimTranscript, lastInput, micStatu
         {history.length === 0 ? (
           <p className="text-sm text-haze">No questions yet. Try “What are our projects?”</p>
         ) : (
-          <ol className="max-h-28 space-y-1 overflow-y-auto pr-1 text-sm">
+          <ol className="max-h-28 space-y-1 overflow-y-auto pr-1 text-sm [@media(max-height:820px)]:max-h-16">
             {history.map((h) => (
               <li key={h.id} className="flex min-w-0 items-baseline gap-2">
                 <span className="shrink-0 text-haze" title={h.source === 'voice' ? 'Voice' : 'Typed'}>

@@ -10,7 +10,7 @@ interface FollowUpOptionsProps {
 export function FollowUpOptions({ followUp, disabled, onChoose }: FollowUpOptionsProps) {
   if (!followUp || followUp.options.length === 0) return null;
   return (
-    <div className="w-full max-w-3xl" role="group" aria-label={followUp.prompt || 'Choose an option'}>
+    <div className="w-full max-w-3xl shrink-0" role="group" aria-label={followUp.prompt || 'Choose an option'}>
       <ul className="flex max-h-40 flex-wrap justify-center gap-1.5 overflow-y-auto px-1 lg:max-h-24">
         {followUp.options.map((option, i) => (
           <li key={`${option.label}-${i}`}>

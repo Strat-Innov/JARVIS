@@ -188,7 +188,7 @@ export default function App() {
       />
 
       <main className="grid flex-1 gap-3 lg:min-h-0 lg:grid-cols-[minmax(250px,300px)_minmax(0,1fr)_minmax(290px,380px)]">
-        <aside className="order-3 min-w-0 lg:order-1 lg:min-h-0" aria-label="Knowledge navigation">
+        <aside className="order-3 min-w-0 lg:order-1 lg:min-h-0 lg:overflow-y-auto" aria-label="Knowledge navigation">
           <KnowledgePanel
             knowledge={knowledge}
             selectedDocId={selectedDoc?.id ?? null}
@@ -206,22 +206,30 @@ export default function App() {
           className={`order-1 flex min-h-0 min-w-0 flex-col items-center gap-2 py-2 lg:order-2 lg:gap-3 ${structured ? 'justify-start' : 'justify-center'}`}
           aria-label="AFAIK"
         >
+          {structured ? (
+            // Long answers: a compact header so the answer gets the space.
+            <div className="flex w-full max-w-3xl shrink-0 items-center gap-3">
+              <div className="w-12 shrink-0 sm:w-14">
+                <AfaikCore state={assistant.state} pulse={assistant.speechPulse} booting={assistant.booting} />
+              </div>
+              <p className={`font-display text-xs tracking-[0.35em] uppercase ${assistant.state === 'error' ? 'text-warn' : 'text-arc-bright'}`} aria-live="polite">
+                {assistant.wakeArmed && assistant.state === 'standby' ? 'Awaiting wake word' : STATE_LABELS[assistant.state]}
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="w-[min(70vw,300px)] shrink-0 sm:w-[min(50vw,360px)] lg:w-[max(160px,min(100%,calc(100dvh-36rem),520px))]">
+                <AfaikCore state={assistant.state} pulse={assistant.speechPulse} booting={assistant.booting} />
+              </div>
+              <p className={`font-display text-xs tracking-[0.4em] uppercase ${assistant.state === 'error' ? 'text-warn' : 'text-arc-bright'}`} aria-live="polite">
+                {assistant.wakeArmed && assistant.state === 'standby' ? 'Awaiting wake word' : STATE_LABELS[assistant.state]}
+              </p>
+            </>
+          )}
           <div
-            className={`shrink-0 transition-[width] duration-500 ${
+            className={`w-full max-w-3xl leading-relaxed [overflow-wrap:anywhere] ${assistant.state === 'error' ? 'text-warn' : 'text-ice'} ${
               structured
-                ? 'w-[min(32vw,140px)] lg:w-[max(96px,min(100%,calc(100dvh-50rem),170px))]'
-                : 'w-[min(70vw,300px)] sm:w-[min(50vw,360px)] lg:w-[max(160px,min(100%,calc(100dvh-36rem),520px))]'
-            }`}
-          >
-            <AfaikCore state={assistant.state} pulse={assistant.speechPulse} booting={assistant.booting} />
-          </div>
-          <p className={`font-display text-xs tracking-[0.4em] uppercase ${assistant.state === 'error' ? 'text-warn' : 'text-arc-bright'}`} aria-live="polite">
-            {assistant.wakeArmed && assistant.state === 'standby' ? 'Awaiting wake word' : STATE_LABELS[assistant.state]}
-          </p>
-          <div
-            className={`w-full max-w-3xl leading-snug ${assistant.state === 'error' ? 'text-warn' : 'text-ice'} ${
-              structured
-                ? 'hud-panel max-h-[55dvh] overflow-y-auto px-4 py-3 text-left text-sm sm:text-base lg:max-h-none lg:min-h-0 lg:flex-1'
+                ? 'hud-panel max-h-[65dvh] overflow-x-hidden overflow-y-auto px-4 py-3 text-left text-[0.95rem] sm:text-base lg:max-h-none lg:min-h-[8rem] lg:flex-1'
                 : 'px-2 text-center text-base whitespace-pre-line sm:text-lg lg:text-xl'
             }`}
             aria-live="polite"
@@ -231,10 +239,10 @@ export default function App() {
           </div>
           {assistant.state !== 'error' && assistant.errorMessage && <p className="text-sm text-warn">{assistant.errorMessage}</p>}
           <FollowUpOptions followUp={assistant.followUp} disabled={busy} onChoose={assistant.chooseOption} />
-          <VoiceControl assistant={assistant} activationMode={settings.activationMode} />
+          <VoiceControl assistant={assistant} activationMode={settings.activationMode} compact={structured} />
         </section>
 
-        <aside className="order-2 min-w-0 lg:order-3 lg:min-h-0" aria-label="Selected page">
+        <aside className="order-2 min-w-0 lg:order-3 lg:min-h-0 lg:overflow-y-auto" aria-label="Selected page">
           <DocumentPanel
             doc={selectedDoc}
             brand={knowledge && selectedDoc ? brandOfDoc(knowledge, selectedDoc.id) : null}

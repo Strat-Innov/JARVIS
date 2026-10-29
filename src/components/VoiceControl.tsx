@@ -6,6 +6,8 @@ import type { ActivationMode } from '../types/afaik';
 interface VoiceControlProps {
   assistant: VoiceAssistant;
   activationMode: ActivationMode;
+  /** Single row (small mic beside the text box) — used while a long answer is on screen. */
+  compact?: boolean;
 }
 
 const START_LABELS: Record<ActivationMode, string> = {
@@ -14,7 +16,7 @@ const START_LABELS: Record<ActivationMode, string> = {
   'wake-word': 'Listen for “AFAIK”',
 };
 
-export function VoiceControl({ assistant, activationMode }: VoiceControlProps) {
+export function VoiceControl({ assistant, activationMode, compact = false }: VoiceControlProps) {
   const [text, setText] = useState('');
   const { state, micOn, recognitionSupported } = assistant;
   const busy = state === 'processing' || state === 'speaking';
@@ -25,6 +27,51 @@ export function VoiceControl({ assistant, activationMode }: VoiceControlProps) {
     assistant.submitText(text);
     setText('');
   };
+
+  const form = (
+    <form onSubmit={onSubmit} className="flex w-full min-w-0 gap-2" aria-label="Type a command">
+      <label htmlFor="command-input" className="sr-only">
+        Command
+      </label>
+      <input
+        id="command-input"
+        className="hud-input"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder={recognitionSupported ? 'Ask a question or type a reply…' : 'Type a question, e.g. “What are our projects?”'}
+        autoComplete="off"
+        enterKeyHint="send"
+      />
+      <button type="submit" className="hud-button shrink-0" disabled={busy || !text.trim()} aria-label="Send command">
+        <SendHorizontal size={18} aria-hidden />
+      </button>
+    </form>
+  );
+
+  if (compact) {
+    return (
+      <div className="flex w-full max-w-3xl shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={assistant.toggleListening}
+          aria-pressed={micOn}
+          aria-label={micOn ? 'Turn microphone off' : START_LABELS[activationMode]}
+          title={micOn ? 'Microphone on — press to stop' : START_LABELS[activationMode]}
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
+            micOn ? 'border-arc-bright bg-arc/25 text-white shadow-[0_0_20px_rgba(103,232,249,0.5)]' : 'border-arc/50 bg-arc/10 text-arc-bright hover:border-arc-bright'
+          } ${recognitionSupported ? '' : 'opacity-60'}`}
+        >
+          {micOn ? <MicOff size={20} aria-hidden /> : <Mic size={20} aria-hidden />}
+        </button>
+        {state === 'speaking' && (
+          <button type="button" className="hud-button shrink-0 px-2!" onClick={assistant.interrupt} aria-label="Stop speaking" title="Stop speaking">
+            <Square size={14} aria-hidden />
+          </button>
+        )}
+        {form}
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full max-w-xl flex-col items-center gap-3">
@@ -50,23 +97,7 @@ export function VoiceControl({ assistant, activationMode }: VoiceControlProps) {
       </div>
       <p className="hud-label text-center">{micOn ? 'Microphone on — press to stop' : START_LABELS[activationMode]}</p>
 
-      <form onSubmit={onSubmit} className="flex w-full gap-2" aria-label="Type a command">
-        <label htmlFor="command-input" className="sr-only">
-          Command
-        </label>
-        <input
-          id="command-input"
-          className="hud-input"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={recognitionSupported ? 'Or type a command…' : 'Type a command, e.g. “Status report”'}
-          autoComplete="off"
-          enterKeyHint="send"
-        />
-        <button type="submit" className="hud-button shrink-0" disabled={busy || !text.trim()} aria-label="Send command">
-          <SendHorizontal size={18} aria-hidden />
-        </button>
-      </form>
+      {form}
     </div>
   );
 }
